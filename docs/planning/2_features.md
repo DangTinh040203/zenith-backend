@@ -13,6 +13,8 @@ This document catalogs **features**: observable capabilities from a product or o
 | **§2 — Implemented today**         | Features backed by code in this repo (minimal BFF, Nx workspace, agent tooling).                                                     |
 | **§3 — Planned platform features** | End-state capabilities aligned with the microservice catalog in the overview; not yet implemented as separate services in this tree. |
 | **§4 — Traceability**              | Maps features to repositories / apps when known.                                                                                     |
+| **§5 — Roadmap phases**            | Suggested delivery order from current monorepo to multi-service platform.                                                            |
+| **§6 — Related documents**         | Links to overview, tech stack, and backend architecture docs.                                                                        |
 
 Use case diagrams use [Mermaid](https://mermaid.js.org/) `flowchart` notation (widely supported in GitHub, GitLab, and VS Code). Actors use `((Name))`; use cases use `[Label]`; the BFF box groups current runtime scope.
 
@@ -32,6 +34,23 @@ These capabilities exist in **`zenith-backend`** as of the planning baseline.
 | **F-BFF-04** | **NestJS bootstrap**         | Application starts via `NestFactory.create(AppModule)` with startup logging.                                         | `main.ts`, `AppModule`.               |
 
 **Non-features (explicit gaps):** authentication, authorization, persistence, file upload, transcoding, catalog, playback state, analytics, OpenAPI, rate limiting, and CORS policy are **not** implemented in the Nest app yet.
+
+### 2.5 Current HTTP contract (smoke)
+
+| Method + path | Response                     | Purpose                                                   |
+| ------------- | ---------------------------- | --------------------------------------------------------- |
+| `GET /api`    | `{ "message": "Hello API" }` | Verify build, port, and global prefix in CI or local dev. |
+
+There is **no** versioning prefix (for example `/api/v1`) yet; when public clients exist, introduce versioned routes or explicit `Accept` negotiation and document breaking-change policy.
+
+### 2.6 Local verification (developer)
+
+| Step | Command / action                                              | Expected                                                      |
+| ---- | ------------------------------------------------------------- | ------------------------------------------------------------- |
+| 1    | `npx nx serve bff` (or `nx run bff:serve` per workspace docs) | Log line with `http://localhost:3000/api` (or `PORT` if set). |
+| 2    | `curl -s http://localhost:3000/api`                           | JSON body with `Hello API`.                                   |
+
+Adjust commands if `AGENTS.md` or root scripts define a preferred alias.
 
 ### 2.2 Engineering — Nx monorepo
 
@@ -103,6 +122,56 @@ These features match the **Zenith** vision in [1_overview.md](./1_overview.md). 
 | **Transcoding engine** | Ingest masters; FFmpeg-based ladder and packaging (HLS/DASH); thumbnails; emit **transcode completed**; scale workers with queue back-pressure. |
 | **Playback**           | Entitlement checks; playback session; resume across devices; hot state and durable progress (design-dependent).                                 |
 | **Insight**            | Ingest engagement events; aggregate for BI; export or stream to warehouse/OLAP (optional).                                                      |
+
+### 3.1a Identity — planned capability detail
+
+| Capability            | User / system value       | Dependencies               | Data owned                               |
+| --------------------- | ------------------------- | -------------------------- | ---------------------------------------- |
+| Sign-up / login       | Account lifecycle         | Email/SMS or OIDC provider | PostgreSQL (users, credentials metadata) |
+| JWT / session issue   | Stateless auth at gateway | Signing keys, rotation job | Key material in secrets manager          |
+| Profile & device list | Multi-device UX           | None critical for MVP      | User profile rows                        |
+| Org / tenant          | B2B or household plans    | Billing events (later)     | Tenant membership tables                 |
+
+**Acceptance hints:** token validation p95 within gateway budget; lockout and rate limits on credential endpoints; audit log for admin actions.
+
+### 3.1b Catalog — planned capability detail
+
+| Capability  | User / system value   | Dependencies                             | Data owned                                 |
+| ----------- | --------------------- | ---------------------------------------- | ------------------------------------------ |
+| Title CRUD  | Editorial workflows   | Object storage for artwork keys          | MongoDB documents per title/season/episode |
+| Browse APIs | Home screen, rails    | Read models or aggregation               | Cached lists in Redis optional             |
+| Search      | Query by text/filters | Search index worker (OpenSearch/Elastic) | Index is a projection, not source of truth |
+
+**Acceptance hints:** read-heavy endpoints documented with pagination; slug uniqueness per tenant; event emitted on publish so Playback can refresh availability.
+
+### 3.1c Transcoding — planned capability detail
+
+| Capability       | User / system value | Dependencies                   | Data owned                            |
+| ---------------- | ------------------- | ------------------------------ | ------------------------------------- |
+| Job enqueue      | Durable processing  | Queue (Rabbit/Redis/SQS-style) | Job state store or idempotent logs    |
+| Ladder + package | Adaptive playback   | FFmpeg, GPU optional           | Rendition keys in object storage      |
+| Thumbnails       | UI grids            | Image pipeline                 | Small objects + references in Catalog |
+
+**Acceptance hints:** job idempotency on duplicate events; visible progress or status endpoint for operators; failure taxonomy (corrupt source, unsupported codec).
+
+### 3.1d Playback — planned capability detail
+
+| Capability           | User / system value       | Dependencies                      | Data owned                 |
+| -------------------- | ------------------------- | --------------------------------- | -------------------------- |
+| Entitlement check    | Prevent unauthorized play | Identity/subscription projections | Rules + cached decisions   |
+| Manifest / URL issue | Start playback            | Catalog + CDN                     | Short-lived tokens or URLs |
+| Resume               | Cross-device continuity   | Durable progress store            | Progress rows or key-value |
+
+**Acceptance hints:** strict timeouts on dependency calls; degrade gracefully (for example stale catalog snippet) when non-critical enrichments fail.
+
+### 3.1e Insight — planned capability detail
+
+| Capability   | User / system value | Dependencies              | Data owned                |
+| ------------ | ------------------- | ------------------------- | ------------------------- |
+| Event ingest | Product analytics   | Kafka or equivalent       | Append-only topic         |
+| Rollups      | Dashboards          | Stream processor or batch | OLAP / warehouse optional |
+
+**Acceptance hints:** schema evolution for events; PII hashing; sampling for ultra-high-volume signals.
 
 ### 3.2 Cross-cutting platform features
 
@@ -205,21 +274,48 @@ flowchart LR
   TR -->|event: ready| CAT
 ```
 
+### 3.6 Failure and degradation (product-level)
+
+| Scenario                          | Desired behavior                                                                            |
+| --------------------------------- | ------------------------------------------------------------------------------------------- |
+| Catalog read slow                 | Gateway may serve cached home rails; avoid blocking playback if entitlements already valid. |
+| Transcode backlog high            | UI shows delayed availability; do not block unrelated browse paths.                         |
+| Identity token introspection down | Fail closed for protected routes; return stable error codes for client retry/backoff.       |
+| Insight pipeline lag              | Playback and catalog remain available; analytics catch up later.                            |
+
 ---
 
 ## 4. Traceability and maintenance
 
-| When                                                                          | Action                                                                                                                             |
-| ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| New **user-visible** or **operator** capability ships in `apps/*` or `libs/*` | Add a row under **§2** with a stable feature ID (`F-BFF-xx` or service prefix); extend **§3** only if the roadmap wording changes. |
-| New **script-only** workflow                                                  | Add under **§2.3** and extend the diagram in **§2.4** if relationships change.                                                     |
-| Architecture rename (e.g. split BFF)                                          | Update diagrams and **§4** pointers; keep [1_overview.md](./1_overview.md) as the source of truth for service names.               |
+| When                                                                          | Action                                                                                                                                           |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| New **user-visible** or **operator** capability ships in `apps/*` or `libs/*` | Add a row under **§2** with a stable feature ID (`F-BFF-xx` or service prefix); extend **§3** only if the roadmap wording changes.               |
+| New **script-only** workflow                                                  | Add under **§2.3** and extend the diagram in **§2.4** if relationships change.                                                                   |
+| Architecture rename (e.g. split BFF)                                          | Update diagrams in **§3**, roadmap in **§5**, and pointers here; keep [1_overview.md](./1_overview.md) as the source of truth for service names. |
 
 **Code-level inventory** (every Nest module, method, and script function name) is intentionally **not** duplicated here; if the team needs that level of detail again, regenerate a dedicated “source inventory” doc or derive it from the codebase search in CI.
 
 ---
 
-## 5. Related documents
+## 5. Roadmap phases (suggested)
 
-- [1_overview.md](./1_overview.md) — vision, service catalog, data ownership, distributed patterns.
+Phases are planning aids—not fixed dates. Re-sequence when product priorities change.
+
+| Phase                  | Goal                               | Typical deliverables in `zenith-backend`                                                              |
+| ---------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| **0 — Baseline**       | Runnable monorepo + BFF smoke      | Current: Nx, Nest BFF, sample route (see §2).                                                         |
+| **1 — Foundations**    | Shared libs, quality gates, config | ESLint/Prettier consistency, health module, structured logging, OpenAPI stub for BFF, `.env.example`. |
+| **2 — Identity slice** | Auth for internal APIs             | JWT validation guard, test users, PostgreSQL app or module boundary—even if still single deployable.  |
+| **3 — Read path MVP**  | Catalog read + playback stub       | Mongo or read-only API behind BFF; mock entitlements then real Identity integration.                  |
+| **4 — Write path MVP** | Upload + transcode happy path      | Presigned URL flow, worker process, events to update catalog availability.                            |
+| **5 — Hardening**      | SLOs, resilience, observability    | Tracing, metrics dashboards, circuit breakers, load tests on playback.                                |
+
+When a phase completes, update this table and mirror the state in your issue tracker epics.
+
+---
+
+## 6. Related documents
+
+- [1_overview.md](./1_overview.md) — vision, service catalog, data ownership, distributed patterns, event catalog.
 - [3_techstack.md](./3_techstack.md) — stack, versions, and evolution from current monorepo to target.
+- [4_backend_architecture.md](./4_backend_architecture.md) — Nest layering, libraries, and service split patterns.

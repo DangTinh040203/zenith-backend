@@ -2,13 +2,14 @@
 
 **Language:** English (consistent with all files under `docs/planning/`).
 
-This document expands the **core tech stack** from [1_overview.md](./1_overview.md): concrete choices, how components connect, trade-offs (gRPC vs REST, RabbitMQ vs Kafka), and **what exists today** in `zenith-backend`. It is planning guidance until superseded by ADRs or locked runbooks. For feature lists and use-case diagrams (current vs planned), see [2_features.md](./2_features.md).
+This document expands the **core tech stack** from [1_overview.md](./1_overview.md): concrete choices, how components connect, trade-offs (gRPC vs REST, RabbitMQ vs Kafka), and **what exists today** in `zenith-backend`. It is planning guidance until superseded by ADRs or locked runbooks. For feature lists and use-case diagrams (current vs planned), see [2_features.md](./2_features.md). For Nest module layout, library boundaries, and extraction order, see [4_backend_architecture.md](./4_backend_architecture.md).
 
 ### How to use the planning set
 
-1. Read **overview** for *why* services exist and how they interact at a business and traffic level.
-2. Read **tech stack** (this file) for *what* technologies apply, including pinned workspace facts and future options.
+1. Read **overview** for _why_ services exist and how they interact at a business and traffic level.
+2. Read **tech stack** (this file) for _what_ technologies apply, including pinned workspace facts and future options.
 3. Read **features** when you need an accurate picture of what is shipped vs planned, including use-case diagrams, before refactoring or splitting apps.
+4. Read **backend architecture** when structuring Nest apps, designing `libs/*`, or planning a second deployable.
 
 ---
 
@@ -43,6 +44,26 @@ Shared **DTOs**, **domain types**, and **event envelope** shapes live in Nx **li
 | **Other runtime deps** | `axios`, `rxjs`, `reflect-metadata`.                                     |
 
 Everything below is **target architecture** unless you add the dependency and wire it in an app.
+
+### 1.5 Pinned toolchain (from root `package.json`)
+
+Versions drift over time; this table reflects the **planning baseline**—refresh when upgrading.
+
+| Package / area                                                                                                 | Pinned / range           | Role                                      |
+| -------------------------------------------------------------------------------------------------------------- | ------------------------ | ----------------------------------------- |
+| `nx`                                                                                                           | **22.7.1**               | Monorepo orchestration, graph, executors. |
+| `@nx/nest`, `@nx/node`, `@nx/webpack`, `@nx/js`, `@nx/eslint`, `@nx/eslint-plugin`, `@nx/web`, `@nx/workspace` | **22.7.1**               | Nx plugins aligned with core.             |
+| `typescript`                                                                                                   | **~5.9.2**               | Language and build-time types.            |
+| `@nestjs/*` (runtime)                                                                                          | **^11.0.0**              | HTTP server, DI, modules.                 |
+| `@nestjs/testing`, `@nestjs/schematics`                                                                        | **^11**                  | Tests and code generation.                |
+| `eslint`                                                                                                       | **^9.8.0**               | Linting.                                  |
+| `typescript-eslint`                                                                                            | **^8.40.0**              | Type-aware ESLint rules.                  |
+| `prettier`                                                                                                     | **~3.6.2**               | Formatting.                               |
+| `webpack-cli`                                                                                                  | **^5.1.4**               | Production bundle for `bff`.              |
+| `@types/node`                                                                                                  | **20.19.9**              | Node typings in TS.                       |
+| `@swc/core`, `@swc-node/register`                                                                              | **~1.15.5**, **~1.11.1** | Fast transpilation where configured.      |
+
+**Node.js runtime:** align production images with **Active LTS**; `@types/node` 20.x implies targeting Node 20 API surface unless you bump types deliberately.
 
 ---
 
@@ -160,6 +181,31 @@ Multi-stage images: **deps** → **build** → **runtime** (distroless or slim b
 
 **Docker Compose** (or **Nx +** local infra) for PostgreSQL, Redis, MinIO, and optional message broker—keeps onboarding repeatable until a full shared dev cluster exists.
 
+**Suggested compose services (planning checklist):**
+
+| Service           | Port (example) | Used by                            |
+| ----------------- | -------------- | ---------------------------------- |
+| PostgreSQL        | 5432           | Identity, billing-adjacent apps.   |
+| Redis             | 6379           | Sessions, rate limits, cache.      |
+| MinIO (S3 API)    | 9000           | Upload/download integration tests. |
+| RabbitMQ or Kafka | 5672 / 9092    | Event and job experiments.         |
+
+Keep **secrets and bucket names** in `.env.example` with placeholders only; document required variables in the same PR that adds compose files.
+
+### 6.4 CI and quality gates (target)
+
+Until a pipeline file exists in-repo, treat this as the **intended** bar:
+
+| Gate                   | Purpose                                                                 |
+| ---------------------- | ----------------------------------------------------------------------- |
+| `nx affected -t lint`  | Fast feedback on style and obvious bugs.                                |
+| `nx affected -t build` | Ensures Webpack/Nest bundles compile.                                   |
+| `nx affected -t test`  | Once tests exist, run unit scope by default.                            |
+| Dependency audit       | `npm audit` or OSV integration on schedule; block on criticals in main. |
+| Lockfile committed     | Reproducible CI and deploys (`package-lock.json` or `pnpm-lock.yaml`).  |
+
+Add **integration tests** (Testcontainers or shared dev services) per bounded context as databases arrive—not one giant suite for the whole monorepo unless runtime allows.
+
 ---
 
 ## 7. Cross-cutting platform concerns
@@ -194,4 +240,12 @@ TLS termination, WAF integration (managed or self-hosted), request size limits, 
 3. **Introduce broker + one event** (e.g. `MediaIngested`) before scaling event complexity.
 4. **Split deployables** when scaling, blast radius, or team ownership demands it—Nx graph helps plan safe moves.
 
-When a choice becomes normative (e.g. “Kafka for all analytics”), capture it in an **ADR** next to these planning docs.
+When a choice becomes normative (e.g. “Kafka for all analytics”), capture it in an **ADR** next to these planning docs (see suggested index in [4_backend_architecture.md](./4_backend_architecture.md) §8).
+
+---
+
+## 9. Related documents
+
+- [1_overview.md](./1_overview.md) — vision, services, events, topology.
+- [2_features.md](./2_features.md) — features, diagrams, roadmap phases.
+- [4_backend_architecture.md](./4_backend_architecture.md) — Nest/Nx structure and extraction order.
