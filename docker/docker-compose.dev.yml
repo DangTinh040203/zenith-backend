@@ -1,0 +1,93 @@
+name: zenith-backend-dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: zenith-dev-postgres
+    restart: unless-stopped
+    ports:
+      - '5432:5432'
+    environment:
+      POSTGRES_USER: zenith
+      POSTGRES_PASSWORD: zenith
+      POSTGRES_DB: zenith
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U zenith -d zenith']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  pgadmin:
+    image: dpage/pgadmin4:9
+    container_name: zenith-dev-pgadmin
+    restart: unless-stopped
+    ports:
+      - '5050:80'
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@zenith.local
+      PGADMIN_DEFAULT_PASSWORD: admin
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  redis:
+    image: redis:7-alpine
+    container_name: zenith-dev-redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  mongodb:
+    image: mongo:7
+    container_name: zenith-dev-mongodb
+    restart: unless-stopped
+    ports:
+      - '27017:27017'
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: zenith
+      MONGO_INITDB_ROOT_PASSWORD: zenith
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'echo ''db.runCommand("ping").ok'' | mongosh localhost:27017/test --quiet | grep 1',
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  minio:
+    image: minio/minio:latest
+    container_name: zenith-dev-minio
+    restart: unless-stopped
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    environment:
+      MINIO_ROOT_USER: zenith
+      MINIO_ROOT_PASSWORD: zenithzenith
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+
+volumes:
+  postgres_data:
+  pgadmin_data:
+  redis_data:
+  mongo_data:
+  minio_data:
