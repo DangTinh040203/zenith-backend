@@ -16,23 +16,14 @@ export class AppService implements OnModuleInit {
     private readonly configService: ConfigService,
   ) {}
 
-  async onModuleInit(): Promise<void> {
+  onModuleInit(): void {
     const host = this.configService.getOrThrow<string>(Env.USER_SERVICE_HOST);
     const port = this.configService.getOrThrow<number>(
       Env.USER_SERVICE_TCP_PORT,
     );
-    try {
-      await this.userServiceClient.connect();
-      this.logger.log(
-        `TCP client connected to user-service at ${host}:${port}`,
-      );
-    } catch (err) {
-      this.logger.error(
-        `TCP client failed to connect to user-service at ${host}:${port}`,
-        err,
-      );
-      throw err;
-    }
+    this.logger.log(
+      `user-service TCP client → ${host}:${port} (connects on first request)`,
+    );
   }
 
   getData(): { message: string } {

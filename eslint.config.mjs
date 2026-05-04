@@ -1,7 +1,7 @@
 import nx from '@nx/eslint-plugin';
 import eslintPluginPrettierRecommended from 'eslint-plugin-prettier/recommended';
 import { FlatCompat } from '@eslint/eslintrc';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
@@ -56,7 +56,14 @@ export default tseslint.config(
     settings: {
       'import/resolver': {
         typescript: {
-          project: ['tsconfig.base.json', 'apps/bff/tsconfig.app.json'],
+          // Absolute paths so eslint-import-resolver-typescript finds path aliases
+          // (`@/*`) regardless of IDE ESLint cwd / flat-config quirks.
+          alwaysTryTypes: true,
+          project: [
+            join(__dirname, 'tsconfig.base.json'),
+            join(__dirname, 'apps/bff/tsconfig.app.json'),
+            join(__dirname, 'apps/user-service/tsconfig.app.json'),
+          ],
         },
         node: {
           extensions: ['.js', '.jsx', '.ts', '.tsx'],
