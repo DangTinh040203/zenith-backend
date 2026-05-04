@@ -8,7 +8,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
-import { Role } from '@/database/entities/role.entity';
+import { Role } from '@/modules/user/infrastructure/persistence/entities/role.entity';
 
 @Entity('users')
 export class User {

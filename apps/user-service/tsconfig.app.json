@@ -14,5 +14,19 @@
     "moduleResolution": "node",
     "resolveJsonModule": true
   },
-  "include": ["src/**/*.ts", "src/**/*.json"]
+  "include": [
+    "src/main.ts",
+    "src/app/**/*.ts",
+    "src/database/**/*.ts",
+    "src/libs/**/*.ts",
+    "src/modules/**/*.ts",
+    "src/**/*.json"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "../../dist",
+    "../../dist/out-tsc",
+    "../../dist/apps/user-service"
+  ]
 }

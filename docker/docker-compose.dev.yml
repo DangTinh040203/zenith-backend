@@ -19,7 +19,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # Postgres dedicated to user-service (db-per-service). Host port 5433 → container 5432.
   postgres-user:
     image: postgres:16-alpine
     container_name: zenith-dev-postgres-user
@@ -103,6 +102,23 @@ services:
     volumes:
       - minio_data:/data
     command: server /data --console-address ":9001"
+
+  ngrok:
+    profiles:
+      - ngrok
+    image: ngrok/ngrok:latest
+    container_name: zenith-dev-ngrok
+    restart: unless-stopped
+    command:
+      - http
+      - 'host.docker.internal:${USER_SERVICE_HTTP_PORT:-4002}'
+      - --log=stdout
+    ports:
+      - '4040:4040'
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:-}
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
 
 volumes:
   postgres_data:
