@@ -19,6 +19,25 @@ services:
       timeout: 5s
       retries: 5
 
+  # Postgres dedicated to user-service (db-per-service). Host port 5433 → container 5432.
+  postgres-user:
+    image: postgres:16-alpine
+    container_name: zenith-dev-postgres-user
+    restart: unless-stopped
+    ports:
+      - '5433:5432'
+    environment:
+      POSTGRES_USER: user_service
+      POSTGRES_PASSWORD: zenith
+      POSTGRES_DB: user_service
+    volumes:
+      - postgres_user_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U user_service -d user_service']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   pgadmin:
     image: dpage/pgadmin4:9
     container_name: zenith-dev-pgadmin
@@ -87,6 +106,7 @@ services:
 
 volumes:
   postgres_data:
+  postgres_user_data:
   pgadmin_data:
   redis_data:
   mongo_data:

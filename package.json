@@ -8,6 +8,7 @@
     "lint": "nx run-many -t lint --all",
     "lint:fix": "nx lint bff -- --fix",
     "lint:bff": "nx lint bff",
+    "lint:user-service": "nx lint user-service",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
