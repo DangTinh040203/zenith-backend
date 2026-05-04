@@ -4,7 +4,7 @@ export enum Env {
   NODE_ENV = 'NODE_ENV',
 
   PORT = 'PORT',
-  FRONTEND_ORIGIN = 'FRONTEND_ORIGIN',
+  TCP_PORT = 'TCP_PORT',
 
   API_PREFIX = 'API_PREFIX',
   API_VERSION = 'API_VERSION',
@@ -15,8 +15,8 @@ export enum Env {
 export const validationSchema = Joi.object({
   [Env.NODE_ENV]: Joi.string().optional(),
   [Env.PORT]: Joi.number().required(),
-  [Env.FRONTEND_ORIGIN]: Joi.string().required(),
+  [Env.TCP_PORT]: Joi.number().required(),
   [Env.API_PREFIX]: Joi.string().default('api'),
   [Env.API_VERSION]: Joi.string().default('1'),
-  [Env.DATABASE_URL]: Joi.string().optional(),
+  [Env.DATABASE_URL]: Joi.string().uri().required(),
 });

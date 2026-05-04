@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
-import cookieParser from 'cookie-parser';
+import { type MicroserviceOptions, Transport } from '@nestjs/microservices';
 import helmet from 'helmet';
 import morgan from 'morgan';
 
@@ -23,22 +23,33 @@ class BootstrapApplication {
 
     this.configService = this.app.get(ConfigService);
     const port = this.configService.getOrThrow<number>(Env.PORT);
+    const tcpPort = this.configService.getOrThrow<number>(Env.TCP_PORT);
     const apiPrefix = this.configService.get<string>(Env.API_PREFIX, 'api');
     const apiVersion = this.configService.get<string>(Env.API_VERSION, '1');
 
     this.app.setGlobalPrefix(`${apiPrefix}/v${apiVersion}`);
 
+    this.app.connectMicroservice<MicroserviceOptions>({
+      transport: Transport.TCP,
+      options: { host: '0.0.0.0', port: tcpPort },
+    });
+
     this.setupMiddleware();
 
+    await this.app.startAllMicroservices();
     await this.app.listen(port);
+
     Logger.log(
-      `User service on http://localhost:${port}/${apiPrefix}/v${apiVersion}`,
+      `User service TCP (BFF) on 0.0.0.0:${tcpPort}`,
+      BootstrapApplication.name,
+    );
+    Logger.log(
+      `User service HTTP (health only) on http://localhost:${port}/${apiPrefix}/v${apiVersion}`,
       BootstrapApplication.name,
     );
   }
 
   private setupMiddleware() {
-    this.app.use(cookieParser());
     this.app.useGlobalPipes(
       new ValidationPipe({
         whitelist: true,
@@ -51,11 +62,6 @@ class BootstrapApplication {
         },
       }),
     );
-
-    this.app.enableCors({
-      origin: this.configService.getOrThrow<string>(Env.FRONTEND_ORIGIN),
-      credentials: true,
-    });
 
     this.app.use(helmet());
 

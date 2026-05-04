@@ -61,7 +61,7 @@ Detailed rationale, messaging trade-offs, data modeling notes, and **current rep
 
 ### Communication
 
-- **Internal synchronous:** **gRPC** (Protobuf, low overhead) for service-to-service calls that need immediate results inside the trust boundary.
+- **Internal synchronous:** **Nest TCP** (`@nestjs/microservices`) for **BFF → first-party Nest services** in this monorepo (e.g. `user-service`); **gRPC** (Protobuf) remains a strong option for cross-language or heavily versioned internal APIs. Neither is exposed to browsers.
 - **Asynchronous:** **RabbitMQ** or **Kafka** for domain events, fan-out, and long-running workflows (transcode completion, index updates, notifications).
 
 ### Data strategy (database-per-service)

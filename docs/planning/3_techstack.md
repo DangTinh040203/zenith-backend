@@ -19,7 +19,7 @@ This document expands the **core tech stack** from [1_overview.md](./1_overview.
 
 - **Why NestJS:** Clear module boundaries (`@Module`), dependency injection, interceptors/guards/pipes for cross-cutting auth and validation, and a path to `@nestjs/microservices` (TCP, Redis, RabbitMQ, Kafka, gRPC) when services split out.
 - **Runtime:** Target **Active LTS** Node.js for production images; keep dev and CI on the same major line to avoid native-addon surprises.
-- **API styles:** Public HTTP (REST or GraphQL) at the edge; **gRPC** inside the cluster for typed, high-throughput internal calls. Avoid exposing raw gRPC to browsers.
+- **API styles:** Public HTTP (REST or GraphQL) at the **BFF / gateway** for browsers; **east–west** first-party RPC may use **Nest TCP** (this repo: BFF → `user-service`) or **gRPC** elsewhere for typed, high-throughput internal calls. Avoid exposing raw gRPC or raw TCP transports to browsers.
 
 ### 1.2 TypeScript
 
@@ -36,12 +36,12 @@ Shared **DTOs**, **domain types**, and **event envelope** shapes live in Nx **li
 
 | Item                   | Detail                                                                   |
 | ---------------------- | ------------------------------------------------------------------------ |
-| **Application**        | `bff` — NestJS app under `apps/bff/`.                                    |
-| **HTTP prefix**        | Global prefix `api` (see `apps/bff/src/main.ts`).                        |
-| **Default port**       | `process.env.PORT` or **3000**.                                          |
-| **NestJS**             | **^11** (`@nestjs/common`, `@nestjs/core`, `@nestjs/platform-express`).  |
-| **Build**              | Webpack via `nx:run-commands` + `webpack-cli` (`apps/bff/project.json`). |
-| **Other runtime deps** | `axios`, `rxjs`, `reflect-metadata`.                                     |
+| **Applications**       | `bff` — NestJS app under `apps/bff/`. **`user-service`** — NestJS app under `apps/user-service/` (domain users/entitlements; **TCP** for BFF RPC, **HTTP** for health only). |
+| **HTTP prefix**        | Global prefix `api` on both apps’ HTTP listeners (see each app’s `main.ts`). |
+| **Default port**       | `process.env.PORT` (BFF often **3000** when unset in code paths).        |
+| **NestJS**             | **^11** (`@nestjs/common`, `@nestjs/core`, `@nestjs/platform-express`, `@nestjs/microservices` for TCP). |
+| **Build**              | Webpack via `nx:run-commands` + `webpack-cli` per app `project.json`.      |
+| **Other runtime deps** | `axios`, `rxjs`, `reflect-metadata`, `typeorm`, `pg` (user-service DB).  |
 
 Everything below is **target architecture** unless you add the dependency and wire it in an app.
 
@@ -102,14 +102,18 @@ A production **Next.js** app may live outside this repo; contracts (OpenAPI, Gra
 
 ## 3. Inter-service communication
 
-### 3.1 gRPC (internal)
+### 3.1 Internal synchronous RPC (Nest TCP vs gRPC)
 
-| Topic                      | Practice                                                                                                    |
+| Transport | When to use in Zenith | Contracts |
+| --------- | --------------------- | --------- |
+| **Nest TCP** (`@nestjs/microservices`, `Transport.TCP`) | **BFF → `user-service`** (and similar in-process-friendly splits in the monorepo). Same runtime and DTOs as the Nest app; no `.proto` compile step. | **Message pattern** strings (e.g. `users.list`) and shared TS DTOs in `libs/*` when you extract contracts. |
+| **gRPC** | Cross-language services, generated stubs, strict binary contracts at scale. | `.proto` in a shared lib; generate TS stubs in CI or on demand. |
+
+| Topic (applies to both)    | Practice                                                                                                    |
 | -------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| **Contracts**              | `.proto` files in a shared lib; generate TS stubs in CI or on demand.                                       |
-| **Evolution**              | Field addition = backward compatible; renames require careful rollout (new field + dual write/read period). |
-| **Resilience**             | **Deadlines** on every call; propagate **cancellation**; bounded channel concurrency on servers.            |
-| **AuthN between services** | End users: **Clerk JWT** validated at BFF/gateway. Service-to-service: JWT in metadata, **mTLS**, or mesh identity—pick one model per environment and document it. |
+| **Evolution**              | Field addition = backward compatible where possible; renames need rollout discipline (new pattern + dual read period for TCP; proto rules for gRPC). |
+| **Resilience**             | **Deadlines** on every call; propagate **cancellation**; bounded concurrency on servers.                    |
+| **AuthN between services** | End users: **Clerk JWT** validated at BFF/gateway only. **Do not** expose user-domain HTTP to the browser—BFF aggregates. East–west: JWT/mTLS/mesh identity per environment—document the chosen model. |
 
 ### 3.2 RabbitMQ vs Kafka (events)
 
@@ -124,7 +128,7 @@ You may run **both**: Rabbit (or Redis Streams) for command-like jobs and Kafka 
 
 ### 3.3 When to use what
 
-- **Synchronous:** user waiting on screen → HTTP through gateway, or internal gRPC with strict timeouts.
+- **Synchronous:** user waiting on screen → HTTP through **gateway/BFF**; BFF may call domain services over **Nest TCP** or **gRPC** with strict timeouts (never expect the browser to call `user-service` directly).
 - **Asynchronous:** transcoding, search index rebuilds, sending analytics, sending notifications → events or job queues with **idempotency keys**.
 
 ---
@@ -228,7 +232,7 @@ Add **integration tests** (Testcontainers or shared dev services) per bounded co
 
 ### 7.1 API gateway
 
-TLS termination, WAF integration (managed or self-hosted), request size limits, **end-user authentication via Clerk** (JWT validation at gateway or BFF—avoid duplicating logic in every microservice), coarse **authorization** (entitlements) in domain services, request ID injection, and **CORS** policy for web clients.
+TLS termination, WAF integration (managed or self-hosted), request size limits, **end-user authentication via Clerk** (JWT validation at gateway or BFF—avoid duplicating logic in every microservice), coarse **authorization** (entitlements) in domain services, request ID injection, and **CORS** policy for **web clients at the BFF/gateway only**—internal domain apps reached via TCP/gRPC do not serve browser CORS.
 
 ### 7.2 Observability
 
@@ -245,7 +249,7 @@ TLS termination, WAF integration (managed or self-hosted), request size limits, 
 
 - **Unit:** domain logic without I/O.
 - **Integration:** DB/testcontainers per service CI job.
-- **Contract:** consumer-driven tests for public HTTP and optionally for gRPC schemas.
+- **Contract:** consumer-driven tests for public HTTP and optionally for **gRPC** schemas or **Nest TCP** message-pattern contracts shared via `libs/*`.
 
 ---
 
