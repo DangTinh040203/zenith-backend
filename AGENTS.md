@@ -28,7 +28,7 @@
 
 ## Learned Workspace Facts
 
-- `zenith-backend` is an Nx monorepo; the Nest entry app is `apps/bff` (Nest 11 baseline per `package.json`), using global route prefix `api` and default listen port from `PORT` or `3000`. `apps/user-service` exposes **Nest TCP** (`TCP_PORT`) for BFF RPC and **HTTP** (`PORT`) for health/readiness only—not a browser-facing product API.
+- `zenith-backend` is an Nx monorepo; the Nest entry app is `apps/bff` (Nest 11 baseline per `package.json`), using global route prefix `api` and default listen port from `PORT` or `3000`. `apps/user-service` is **Nest TCP only** (`TCP_PORT`) for BFF RPC—no HTTP listener; orchestration health checks should use TCP/exec probes or sidecars, not an in-app HTTP route.
 - `nx.json` sets generator defaults for `@nx/nest:application` and `@nx/node:application` so `unitTestRunner` and `e2eTestRunner` are `none`, avoiding generated unit and e2e projects for new apps.
 - Product and architecture planning live under `zenith-backend/docs/planning/` as `1_overview.md`, `2_features.md`, `3_techstack.md`, and `4_backend_architecture.md` (vision, features, stack, and backend service layout versus the current repo snapshot).
 - End-user authentication is intended to use Clerk rather than a custom login implementation; services verify Clerk-issued tokens and own authorization, entitlements, and minimal user sync as described in `3_techstack.md`.
