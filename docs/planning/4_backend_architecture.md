@@ -2,7 +2,7 @@
 
 **Language:** English (consistent with all files under `docs/planning/`).
 
-This document describes **how to structure code** inside `zenith-backend`: NestJS layering, Nx libraries, boundaries between the current BFF and future services, and safe patterns for synchronous and asynchronous integration. It complements [1_overview.md](./1_overview.md) (platform vision), [2_features.md](./2_features.md) (capabilities and roadmap), and [3_techstack.md](./3_techstack.md) (technology choices and pinned versions).
+This document describes **how to structure code** inside `zenith-backend`: NestJS layering, Nx libraries, boundaries between the current BFF and future services, safe patterns for synchronous and asynchronous integration, and the **planned service inventory** (count and names). It complements [1_overview.md](./1_overview.md) (platform vision), [2_features.md](./2_features.md) (capabilities and roadmap), and [3_techstack.md](./3_techstack.md) (technology choices and pinned versions).
 
 ---
 
@@ -27,7 +27,45 @@ This document describes **how to structure code** inside `zenith-backend`: NestJ
 
 ---
 
-## 3. Layered structure (NestJS)
+## 3. Backend service catalog (planned)
+
+This section answers **how many backend services** Zenith targets and **what each is called**. Names align with the **service catalog** in [1_overview.md](./1_overview.md) §3.1; **authentication** is delegated to **Clerk** ([3_techstack.md](./3_techstack.md) §1.6), so the service that [1_overview.md](./1_overview.md) labels **Identity** is understood here as **Zenith-owned user, subscription, and entitlement data** keyed by Clerk `userId`, not a custom credential store.
+
+### 3.1 How to count
+
+| Layer                                     | Count                         | What it is                                                                                                                                                                                           |
+| ----------------------------------------- | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **North–south edge**                      | **1** (optional in this repo) | **API gateway** — TLS, routing, rate limits, optional JWT validation at the edge. Often **Kong, Envoy, cloud API Gateway, or Ingress + WAF**—not necessarily a Nest application in `zenith-backend`. |
+| **Nest deployables in `apps/*` (target)** | **6**                         | **1 BFF** + **5 domain services** listed below—each should own its datastore and be independently deployable when the architecture matures.                                                          |
+
+**Total backend-facing components at the platform level:** **up to 7** (1 gateway + 6 Nest apps). Early phases may run several domains inside **one** Nest process before splitting.
+
+### 3.2 The six Nest applications (names and roles)
+
+| #     | Planned service name   | Example `apps/*` slug                | Primary responsibility                                                                                                                                                                                                                       |
+| ----- | ---------------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1** | **BFF**                | `bff` (today)                        | HTTP aggregation and client-specific shaping for Next.js / mobile; validates **Clerk** session JWTs on ingress to the backend mesh; does not own long-lived domain tables.                                                                   |
+| **2** | **User & entitlement** | e.g. `user-api`                      | Profiles, **subscriptions**, **entitlements**, Clerk **webhook** handling, internal user ids; **PostgreSQL** (or equivalent). Maps to **Identity** in the overview catalog for _application_ identity, while Clerk handles _authentication_. |
+| **3** | **Catalog**            | e.g. `catalog-api`                   | Titles, seasons/episodes, artwork references, categories, discovery; **MongoDB** (or similar); search index updates via events.                                                                                                              |
+| **4** | **Transcoding engine** | e.g. `transcode-api` / worker deploy | Ingest triggers, FFmpeg ladder, thumbnails, packaging (HLS/DASH), writes to object storage, emits **TranscodeCompleted**. Often **CPU-heavy**—scale separately from read APIs.                                                               |
+| **5** | **Playback**           | e.g. `playback-api`                  | Entitlement checks against Zenith rules, playback session, manifest / signed URL issuance, resume; **Redis** hot paths + durable progress per ADR.                                                                                           |
+| **6** | **Insight**            | e.g. `insight-api`                   | Engagement and ops event ingestion, aggregation, export to BI; **Kafka** or **RabbitMQ** consumers (see tech stack).                                                                                                                         |
+
+### 3.3 Optional future split (not in the base six)
+
+| Service                  | When to introduce                                                                                                                                                                     |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Billing**              | If payment-provider webhooks, invoices, and tax logic outgrow **User & entitlement**—split behind stable APIs and events (`SubscriptionActivated`, etc.).                             |
+| **Upload orchestration** | If presigned URL minting, virus scan hooks, and ingest policy need isolation from BFF and Catalog—otherwise keep as a **module** inside BFF or Catalog until load demands separation. |
+
+### 3.4 Mapping to Nx and libraries
+
+- Each row in §3.2 should eventually become **`apps/<slug>`** with its own `project.json`, container image, and migration stream for its database.
+- Shared **DTOs / proto / event envelopes** live under `libs/*` with tags (`scope:catalog`, `scope:playback`, …)—see §5.
+
+---
+
+## 4. Layered structure (NestJS)
 
 Use a **hexagonal / clean** bias inside each app or lib slice:
 
@@ -42,51 +80,51 @@ Use a **hexagonal / clean** bias inside each app or lib slice:
 
 ---
 
-## 4. Nx workspace layout (recommended evolution)
+## 5. Nx workspace layout (recommended evolution)
 
-### 4.1 Apps
+### 5.1 Apps
 
 | App                   | Role today                                | Future note                                            |
 | --------------------- | ----------------------------------------- | ------------------------------------------------------ |
 | `apps/bff`            | Public or semi-public HTTP aggregation    | May remain BFF-only, or shrink as dedicated APIs grow. |
 | `apps/*-api` (future) | One deployable per stable bounded context | Each with own Dockerfile, health checks, migrations.   |
 
-### 4.2 Libraries (`libs/`)
+### 5.2 Libraries (`libs/`)
 
 Introduce libraries **before** splitting deployables. Example naming (adjust to taste):
 
-| Library pattern                  | Contents                                                                                        |
-| -------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `libs/shared/kernel`             | Logger interface, result types, base errors, correlation id utilities.                          |
-| `libs/identity/contracts`        | DTOs and validation schemas shared with BFF (no framework imports in domain types if possible). |
-| `libs/catalog/data-access`       | Repository implementations; depends on Mongo driver or ORM.                                     |
-| `libs/media/transcode-contracts` | Event payload types and version constants.                                                      |
+| Library pattern                  | Contents                                                                                  |
+| -------------------------------- | ----------------------------------------------------------------------------------------- |
+| `libs/shared/kernel`             | Logger interface, result types, base errors, correlation id utilities.                    |
+| `libs/user/contracts`            | DTOs and validation for user/entitlement APIs shared with BFF (Clerk id at the boundary). |
+| `libs/catalog/data-access`       | Repository implementations; depends on Mongo driver or ORM.                               |
+| `libs/media/transcode-contracts` | Event payload types and version constants.                                                |
 
-### 4.3 Nx tags (enforcement)
+### 5.3 Nx tags (enforcement)
 
 Define tags in `eslint.config` / Nx rules when the workspace grows, for example:
 
-- `scope:identity`, `scope:catalog`, `scope:media`, `scope:shared`
+- `scope:user`, `scope:catalog`, `scope:media`, `scope:playback`, `scope:insight`, `scope:shared`
 - `type:feature`, `type:data-access`, `type:util`
 
-**Dependency rule of thumb:** `type:feature` may depend on `type:data-access` and `type:util`, but not vice versa. `scope:catalog` must not import `scope:identity` internals—only **published contracts** from a `contracts` lib.
+**Dependency rule of thumb:** `type:feature` may depend on `type:data-access` and `type:util`, but not vice versa. `scope:catalog` must not import `scope:user` internals—only **published contracts** from a `contracts` lib.
 
 ---
 
-## 5. BFF vs domain services
+## 6. BFF vs domain services
 
-| Concern         | BFF (`apps/bff` or dedicated BFF app)     | Domain service (e.g. Catalog API)            |
-| --------------- | ----------------------------------------- | -------------------------------------------- |
-| **Audience**    | Web or mobile client shapes               | Internal + gateway; stable domain API        |
-| **Aggregation** | Combines multiple backends for one screen | Avoid arbitrary cross-domain joins           |
-| **Auth**        | Cookie/session translation, CSRF policy   | Service-to-service auth, fine-grained checks |
-| **Caching**     | Response caching tailored to UI           | Cache owned data only                        |
+| Concern         | BFF (`apps/bff` or dedicated BFF app)               | Domain service (e.g. Catalog API)            |
+| --------------- | --------------------------------------------------- | -------------------------------------------- |
+| **Audience**    | Web or mobile client shapes                         | Internal + gateway; stable domain API        |
+| **Aggregation** | Combines multiple backends for one screen           | Avoid arbitrary cross-domain joins           |
+| **Auth**        | Clerk session / JWT verification at edge of backend | Service-to-service auth, fine-grained checks |
+| **Caching**     | Response caching tailored to UI                     | Cache owned data only                        |
 
-The **first** split is often “BFF stays thin, extract Catalog or Identity as separate Nest app” rather than cloning the entire monolith.
+The **first** split is often “BFF stays thin, extract **Catalog** or **User & entitlement** as separate Nest app” rather than cloning the entire monolith.
 
 ---
 
-## 6. Synchronous integration
+## 7. Synchronous integration
 
 | Pattern                    | When to use                                     | Pitfalls                                                                    |
 | -------------------------- | ----------------------------------------------- | --------------------------------------------------------------------------- |
@@ -98,7 +136,7 @@ Always propagate **cancellation** and **timeouts** from controllers into downstr
 
 ---
 
-## 7. Asynchronous integration
+## 8. Asynchronous integration
 
 | Pattern                  | When to use                                       | Notes                                                                                           |
 | ------------------------ | ------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
@@ -110,7 +148,7 @@ Avoid publishing to a broker **before** the owning service’s database transact
 
 ---
 
-## 8. ADR index (suggested)
+## 9. ADR index (suggested)
 
 Create `docs/planning/adr/` and number sequentially. Seed topics:
 
@@ -126,7 +164,7 @@ Link each ADR from [1_overview.md](./1_overview.md) §8 when filed.
 
 ---
 
-## 9. Checklist: adding a second Nest application
+## 10. Checklist: adding a second Nest application
 
 1. **Identify bounded context:** clear data ownership and minimal fan-in from other domains.
 2. **Move domain + data-access libs** first; keep BFF calling in-process or HTTP until wire-up is stable.
@@ -137,8 +175,8 @@ Link each ADR from [1_overview.md](./1_overview.md) §8 when filed.
 
 ---
 
-## 10. Related documents
+## 11. Related documents
 
 - [1_overview.md](./1_overview.md) — microservice catalog, request paths, event catalog.
 - [2_features.md](./2_features.md) — feature IDs, roadmap phases, diagrams.
-- [3_techstack.md](./3_techstack.md) — versions, brokers, data stores, CI targets.
+- [3_techstack.md](./3_techstack.md) — versions, brokers, data stores, CI targets, Clerk.

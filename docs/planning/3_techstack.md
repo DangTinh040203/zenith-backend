@@ -65,6 +65,21 @@ Versions drift over time; this table reflects the **planning baseline**—refres
 
 **Node.js runtime:** align production images with **Active LTS**; `@types/node` 20.x implies targeting Node 20 API surface unless you bump types deliberately.
 
+### 1.6 Authentication (Clerk)
+
+**Decision:** end-user **authentication is delegated to [Clerk](https://clerk.com/)**—sign-in, sign-up, sessions, OAuth/social providers, MFA, and (if needed) **Organizations** use Clerk’s hosted UIs and dashboards. The backend **does not** implement custom username/password storage, credential hashing, or login forms.
+
+| Area | Direction |
+| ---- | --------- |
+| **Next.js (browser)** | Clerk’s React/Next SDK (`@clerk/nextjs`): `<ClerkProvider>`, middleware for route protection, session hooks. Align with Clerk’s recommended App Router patterns. |
+| **Nest BFF / APIs** | Treat Clerk as the **identity provider**: verify **Clerk-issued JWTs** (session tokens) on protected routes using `@clerk/backend` (`verifyToken`) or equivalent JWKS validation; map `sub` (Clerk user id) to your internal user/tenant rows if you maintain a profile store. |
+| **Webhooks** | Use Clerk **webhooks** (`user.created`, `user.updated`, `user.deleted`, org events if used) to sync a minimal user projection into **PostgreSQL** (or another store you own) for entitlements, billing keys, and foreign keys—Clerk remains source of truth for credentials. |
+| **Service-to-service** | Browser → BFF uses Clerk session/JWT; **east-west** calls between Nest services continue to use **mTLS**, mesh identity, or short-lived internal JWTs **after** the BFF has established the user context—do not forward Clerk secret keys to workers. |
+| **Secrets / config** | `CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, webhook signing secret, and instance/domain settings via environment (12-factor); never commit real values. |
+| **Typical packages** | `@clerk/nextjs` on the Next.js app; `@clerk/backend` (or official verify helpers) on Nest for JWT validation. |
+
+**What you still implement in Zenith:** authorization (**entitlements**, catalog roles, playback rules), linking Clerk `userId` to subscription/billing state, and **webhook idempotency** handlers. Record any normative Clerk + Nest wiring in an ADR when the first integration lands.
+
 ---
 
 ## 2. Frontend (ecosystem)
@@ -72,6 +87,7 @@ Versions drift over time; this table reflects the **planning baseline**—refres
 ### 2.1 Next.js
 
 - **SSR / PPR / caching:** Use server rendering for SEO-heavy catalog pages; cache stable fragments where product requirements allow; keep personalized playback UI client-driven where it reduces TTFB complexity.
+- **Auth (Clerk):** use Clerk for the **browser session**; pass Clerk session JWT or cookies only to trusted server code (Next.js server components / route handlers or the Nest BFF), not to untrusted clients for backend admin keys.
 - **BFF alignment:** Route handlers or server actions can aggregate multiple backend calls with a single cookie/session model so the browser never holds service-to-service tokens.
 
 ### 2.2 Tailwind CSS
@@ -93,7 +109,7 @@ A production **Next.js** app may live outside this repo; contracts (OpenAPI, Gra
 | **Contracts**              | `.proto` files in a shared lib; generate TS stubs in CI or on demand.                                       |
 | **Evolution**              | Field addition = backward compatible; renames require careful rollout (new field + dual write/read period). |
 | **Resilience**             | **Deadlines** on every call; propagate **cancellation**; bounded channel concurrency on servers.            |
-| **AuthN between services** | JWT in metadata, mTLS, or mesh identity—pick one model per environment and document it.                     |
+| **AuthN between services** | End users: **Clerk JWT** validated at BFF/gateway. Service-to-service: JWT in metadata, **mTLS**, or mesh identity—pick one model per environment and document it. |
 
 ### 3.2 RabbitMQ vs Kafka (events)
 
@@ -117,7 +133,7 @@ You may run **both**: Rabbit (or Redis Streams) for command-like jobs and Kafka 
 
 ### 4.1 PostgreSQL (transactional services)
 
-- **Ownership:** identity, subscriptions, anything involving money-like invariants.
+- **Ownership:** app-owned **profiles and entitlements** keyed by **Clerk user id** (and subscriptions, anything involving money-like invariants). **Credentials and login flows** stay in Clerk, not in your schema.
 - **Migrations:** one migration stream **per service** (never a global shared migration folder across ownership boundaries).
 - **ORM/driver:** Nest commonly pairs with **Prisma**, **TypeORM**, **Drizzle**, or **node-pg**—choose per service and record an ADR; do not mix two ORMs in one bounded context without reason.
 
@@ -131,7 +147,7 @@ You may run **both**: Rabbit (or Redis Streams) for command-like jobs and Kafka 
 
 | Use                          | Notes                                                                            |
 | ---------------------------- | -------------------------------------------------------------------------------- |
-| **Session / device binding** | Short TTL; refresh rotation coordinated with Identity.                           |
+| **Session / device binding** | Prefer **Clerk** for browser/session concerns; use Redis for BFF rate limits, playback tokens, or denormalized hot reads—not as a second credential store unless an ADR says otherwise. |
 | **Rate limiting**            | Token bucket per IP/user/API key at gateway edge.                                |
 | **Cache**                    | Cache-aside with explicit TTLs; stampede protection for hot keys (singleflight). |
 | **Coordination**             | Locks sparingly; prefer lease patterns and short TTLs.                           |
@@ -212,7 +228,7 @@ Add **integration tests** (Testcontainers or shared dev services) per bounded co
 
 ### 7.1 API gateway
 
-TLS termination, WAF integration (managed or self-hosted), request size limits, authentication, coarse authorization, request ID injection, and **CORS** policy for web clients.
+TLS termination, WAF integration (managed or self-hosted), request size limits, **end-user authentication via Clerk** (JWT validation at gateway or BFF—avoid duplicating logic in every microservice), coarse **authorization** (entitlements) in domain services, request ID injection, and **CORS** policy for web clients.
 
 ### 7.2 Observability
 
@@ -235,12 +251,12 @@ TLS termination, WAF integration (managed or self-hosted), request size limits, 
 
 ## 8. Evolution: from today’s monorepo to the target
 
-1. **Extract libraries** for shared protobufs, auth guards, and logging first.
+1. **Extract libraries** for shared protobufs, **Clerk JWT verification helpers** (BFF guards), and logging first.
 2. **Add second Nest app** behind the same repo with its own DB migration path when a bounded context stabilizes.
 3. **Introduce broker + one event** (e.g. `MediaIngested`) before scaling event complexity.
 4. **Split deployables** when scaling, blast radius, or team ownership demands it—Nx graph helps plan safe moves.
 
-When a choice becomes normative (e.g. “Kafka for all analytics”), capture it in an **ADR** next to these planning docs (see suggested index in [4_backend_architecture.md](./4_backend_architecture.md) §8).
+When a choice becomes normative (e.g. “Kafka for all analytics”), capture it in an **ADR** next to these planning docs (see suggested index in [4_backend_architecture.md](./4_backend_architecture.md) §9).
 
 ---
 

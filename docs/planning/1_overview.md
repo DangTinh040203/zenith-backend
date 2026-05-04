@@ -188,7 +188,7 @@ Events are the primary way to keep **database-per-service** boundaries honest. N
 
 ## 8. Open decisions (track with ADRs)
 
-Capture irreversible or expensive choices as short **Architecture Decision Records** under `docs/planning/adr/` with sequential numbering. A **seed list** of titles lives in [4_backend_architecture.md](./4_backend_architecture.md) §8. Candidate topics beyond that list: DRM strategy, global vs regional catalog shards, GraphQL vs REST at BFF, multi-region failover for object storage.
+Capture irreversible or expensive choices as short **Architecture Decision Records** under `docs/planning/adr/` with sequential numbering. A **seed list** of titles lives in [4_backend_architecture.md](./4_backend_architecture.md) §9. Candidate topics beyond that list: DRM strategy, global vs regional catalog shards, GraphQL vs REST at BFF, multi-region failover for object storage.
 
 ---
 
