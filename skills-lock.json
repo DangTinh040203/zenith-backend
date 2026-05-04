@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "skills": {
+    "clean-architecture": {
+      "source": "wondelai/skills",
+      "sourceType": "github",
+      "skillPath": "clean-architecture/SKILL.md",
+      "computedHash": "49b99ed12200c0717eb14d8ff9da9cc1a577ac2fe488a4f4e55047cf35767be5"
+    },
+    "clean-code": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "skillPath": "skills/clean-code/SKILL.md",
+      "computedHash": "74bf6ded4f61ddcb593e7a29beb96c284f888cbe0639ad6e23710447c36ff19a"
+    },
+    "nestjs-best-practices": {
+      "source": "kadajett/agent-nestjs-skills",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "1b6f82e889d19d305e38e35594de08eca0242321f353cafa4cf5e61dd3aa1a73"
+    },
+    "typescript-patterns": {
+      "source": "oakoss/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/typescript-patterns/SKILL.md",
+      "computedHash": "ee6ea85f22b892b8b2b0a44e1a2bfac1e2796bc5310cbeee980b5772d319897f"
+    }
+  }
+}
