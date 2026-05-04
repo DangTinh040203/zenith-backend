@@ -2,7 +2,14 @@
   "name": "@zenith-backend/source",
   "version": "0.0.0",
   "license": "MIT",
-  "scripts": {},
+  "scripts": {
+    "build": "nx run-many -t build --all",
+    "lint": "nx run-many -t lint --all",
+    "lint:fix": "nx lint bff -- --fix",
+    "lint:bff": "nx lint bff",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
   "private": true,
   "dependencies": {
     "@nestjs/common": "^11.0.0",
@@ -13,6 +20,7 @@
     "rxjs": "^7.8.0"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.2.0",
     "@eslint/js": "^9.8.0",
     "@nestjs/schematics": "^11.0.0",
     "@nestjs/testing": "^11.0.0",
@@ -30,6 +38,12 @@
     "@types/node": "20.19.9",
     "eslint": "^9.8.0",
     "eslint-config-prettier": "^10.0.0",
+    "eslint-import-resolver-typescript": "^4.4.4",
+    "eslint-plugin-immer": "^0.0.1",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-prettier": "^5.2.2",
+    "eslint-plugin-simple-import-sort": "^12.1.1",
+    "globals": "^17.6.0",
     "nx": "22.7.1",
     "prettier": "~3.6.2",
     "tslib": "^2.3.0",
