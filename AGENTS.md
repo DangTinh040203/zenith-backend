@@ -21,3 +21,10 @@
 - The `nx-generate` skill handles generator discovery internally - don't call nx_docs just to look up generator syntax
 
 <!-- nx configuration end-->
+
+## Learned Workspace Facts
+
+- `zenith-backend` is an Nx monorepo; the Nest entry app is `apps/bff` (Nest 11 baseline per `package.json`), using global route prefix `api` and default listen port from `PORT` or `3000`.
+- `nx.json` sets generator defaults for `@nx/nest:application` and `@nx/node:application` so `unitTestRunner` and `e2eTestRunner` are `none`, avoiding generated unit and e2e projects for new apps.
+- Product and architecture planning live under `zenith-backend/docs/planning/` (for example `1_overview.md` and `2_techstack.md`), describing the Zenith streaming microservices vision versus the current repo snapshot.
+- Cursor agent skills for this backend are installed under `zenith-backend/.agents/skills/` with `skills-lock.json` recording sources; `.agents` is intended to be commit-visible for team sync (not listed in `.gitignore`).
