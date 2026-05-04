@@ -20,6 +20,6 @@ export const validationSchema = Joi.object({
   [Env.FRONTEND_ORIGIN]: Joi.string().required(),
   [Env.API_PREFIX]: Joi.string().default('api'),
   [Env.API_VERSION]: Joi.string().default('1'),
-  [Env.USER_SERVICE_HOST]: Joi.string().default('127.0.0.1'),
-  [Env.USER_SERVICE_TCP_PORT]: Joi.number().default(4001),
+  [Env.USER_SERVICE_HOST]: Joi.string().required(),
+  [Env.USER_SERVICE_TCP_PORT]: Joi.number().required(),
 });
