@@ -17,7 +17,7 @@ import { Env } from '@/libs/configs/env.config';
           type: 'postgres' as const,
           url: databaseUrl,
           autoLoadEntities: true,
-          synchronize: nodeEnv !== 'production',
+          synchronize: false,
           logging: nodeEnv === 'development',
         };
       },

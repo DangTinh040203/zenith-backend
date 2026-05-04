@@ -150,7 +150,7 @@ export default tseslint.config(
   },
 
   {
-    files: ['apps/**/src/**/*.ts', 'libs/**/src/**/*.ts'],
+    files: ['apps/**/src/**/*.ts', 'libs/**/src/**/*.ts', 'src/**/*.ts'],
     rules: {
       'no-restricted-imports': [
         'error',

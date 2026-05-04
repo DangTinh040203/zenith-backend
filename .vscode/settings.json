@@ -1,4 +1,5 @@
 {
+  "eslint.useFlatConfig": true,
   "eslint.workingDirectories": [
     { "directory": "apps/bff", "changeProcessCWD": true },
     { "directory": "apps/user-service", "changeProcessCWD": true }
