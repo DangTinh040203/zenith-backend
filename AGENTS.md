@@ -24,8 +24,8 @@ under `docs/planning/`.
 - `apps/bff` is the browser-facing HTTP aggregation layer. It owns client
   shaping, CORS, request validation, and calls domain services.
 - `apps/user-service` owns user/profile/subscription/entitlement concerns. It
-  exposes Nest TCP for BFF RPC and keeps HTTP for health/readiness plus Clerk
-  webhook handling; browser clients should not call it directly.
+  exposes Nest TCP for BFF RPC and Clerk webhook projection forwarded by BFF;
+  it must not expose REST/HTTP APIs.
 - Repo-level `libs/*` are planned for shared contracts and utilities. When a
   concept is reused across apps, extract it through Nx rather than deep-importing
   between app internals.

@@ -1,40 +1,58 @@
+import { existsSync, readFileSync } from 'node:fs';
+
 import { Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { type MicroserviceOptions, Transport } from '@nestjs/microservices';
-import { type NestExpressApplication } from '@nestjs/platform-express';
+import { parse } from 'dotenv';
 
 import { AppModule } from '@/app/app.module';
 import { Env } from '@/libs/configs';
+import { resolveUserServiceEnvFilePaths } from '@/libs/configs/env-file-paths';
 
 class BootstrapApplication {
-  private app!: NestExpressApplication;
-  private configService!: ConfigService;
-
   async run() {
-    this.app = await NestFactory.create<NestExpressApplication>(AppModule);
+    loadUserServiceEnv();
 
-    this.configService = this.app.get(ConfigService);
-    const tcpPort = this.configService.getOrThrow<number>(Env.TCP_PORT);
-    const httpPort = this.configService.getOrThrow<number>(Env.HTTP_PORT);
+    const tcpPort = getTcpPort();
 
-    this.app.connectMicroservice<MicroserviceOptions>({
-      transport: Transport.TCP,
-      options: { host: '0.0.0.0', port: tcpPort },
-    });
+    const app = await NestFactory.createMicroservice<MicroserviceOptions>(
+      AppModule,
+      {
+        transport: Transport.TCP,
+        options: { host: '0.0.0.0', port: tcpPort },
+      },
+    );
 
-    await this.app.startAllMicroservices();
-    await this.app.listen(httpPort, '0.0.0.0');
+    await app.listen();
 
     Logger.log(
       `User service TCP listening on 0.0.0.0:${tcpPort}`,
       BootstrapApplication.name,
     );
-    Logger.log(
-      `User service HTTP listening on http://0.0.0.0:${httpPort}`,
-      BootstrapApplication.name,
-    );
   }
+}
+
+function loadUserServiceEnv(): void {
+  for (const envFilePath of resolveUserServiceEnvFilePaths()) {
+    if (!existsSync(envFilePath)) {
+      continue;
+    }
+
+    const parsedEnv = parse(readFileSync(envFilePath));
+    for (const [key, value] of Object.entries(parsedEnv)) {
+      process.env[key] ??= value;
+    }
+  }
+}
+
+function getTcpPort(): number {
+  const tcpPort = Number(process.env[Env.TCP_PORT]);
+
+  if (!Number.isInteger(tcpPort) || tcpPort <= 0) {
+    throw new Error(`${Env.TCP_PORT} must be a positive integer`);
+  }
+
+  return tcpPort;
 }
 
 void new BootstrapApplication().run();
