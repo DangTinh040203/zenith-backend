@@ -25,6 +25,11 @@ for (const envFilePath of resolveUserServiceEnvFilePaths()) {
 }
 
 const databaseUrl = process.env.DATABASE_URL;
+const cwd = process.cwd().replace(/\\/g, '/');
+const runningFromAppDir = cwd.endsWith('/apps/user-service');
+const sourceRoot = runningFromAppDir
+  ? join(process.cwd(), 'src')
+  : join(process.cwd(), 'apps', 'user-service', 'src');
 
 if (!databaseUrl) {
   throw new Error('DATABASE_URL is required to run user-service migrations');
@@ -33,18 +38,7 @@ if (!databaseUrl) {
 export default new DataSource({
   type: 'postgres',
   url: databaseUrl,
-  entities: [
-    join(
-      __dirname,
-      '..',
-      'modules',
-      'user',
-      'infrastructure',
-      'persistence',
-      'entities',
-      '*.entity.{ts,js}',
-    ),
-  ],
-  migrations: [join(__dirname, 'migrations', '*.{ts,js}')],
+  entities: [],
+  migrations: [join(sourceRoot, 'database', 'migrations', '*.{ts,js}')],
   synchronize: false,
 });

@@ -6,7 +6,7 @@ export class CreateUserTables1777939200000 implements MigrationInterface {
   async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"');
     await queryRunner.query(`
-      CREATE TABLE "roles" (
+      CREATE TABLE IF NOT EXISTS "roles" (
         "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
         "slug" varchar(100) NOT NULL,
         "name" varchar(255),
@@ -19,7 +19,7 @@ export class CreateUserTables1777939200000 implements MigrationInterface {
       )
     `);
     await queryRunner.query(`
-      CREATE TABLE "users" (
+      CREATE TABLE IF NOT EXISTS "users" (
         "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
         "email" varchar(320) NOT NULL,
         "displayName" varchar(255),
@@ -33,29 +33,43 @@ export class CreateUserTables1777939200000 implements MigrationInterface {
       )
     `);
     await queryRunner.query(`
-      CREATE TABLE "user_roles" (
+      CREATE TABLE IF NOT EXISTS "user_roles" (
         "user_id" uuid NOT NULL,
         "role_id" uuid NOT NULL,
         CONSTRAINT "PK_user_roles" PRIMARY KEY ("user_id", "role_id")
       )
     `);
     await queryRunner.query(
-      'CREATE INDEX "IDX_user_roles_user_id" ON "user_roles" ("user_id")',
+      'CREATE INDEX IF NOT EXISTS "IDX_user_roles_user_id" ON "user_roles" ("user_id")',
     );
     await queryRunner.query(
-      'CREATE INDEX "IDX_user_roles_role_id" ON "user_roles" ("role_id")',
+      'CREATE INDEX IF NOT EXISTS "IDX_user_roles_role_id" ON "user_roles" ("role_id")',
     );
     await queryRunner.query(`
-      ALTER TABLE "user_roles"
-      ADD CONSTRAINT "FK_user_roles_user_id"
-      FOREIGN KEY ("user_id") REFERENCES "users"("id")
-      ON DELETE CASCADE ON UPDATE CASCADE
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'FK_user_roles_user_id'
+        ) THEN
+          ALTER TABLE "user_roles"
+          ADD CONSTRAINT "FK_user_roles_user_id"
+          FOREIGN KEY ("user_id") REFERENCES "users"("id")
+          ON DELETE CASCADE ON UPDATE CASCADE;
+        END IF;
+      END $$;
     `);
     await queryRunner.query(`
-      ALTER TABLE "user_roles"
-      ADD CONSTRAINT "FK_user_roles_role_id"
-      FOREIGN KEY ("role_id") REFERENCES "roles"("id")
-      ON DELETE CASCADE ON UPDATE CASCADE
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'FK_user_roles_role_id'
+        ) THEN
+          ALTER TABLE "user_roles"
+          ADD CONSTRAINT "FK_user_roles_role_id"
+          FOREIGN KEY ("role_id") REFERENCES "roles"("id")
+          ON DELETE CASCADE ON UPDATE CASCADE;
+        END IF;
+      END $$;
     `);
   }
 
