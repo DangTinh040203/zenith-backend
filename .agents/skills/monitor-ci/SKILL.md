@@ -52,7 +52,7 @@ Before starting the monitoring loop, verify the workspace is connected to Nx Clo
 ## Architecture Overview
 
 1. **This skill (orchestrator)**: spawns subagents, runs scripts, prints status, does local coding work
-2. **ci-monitor-subagent (haiku)**: calls one MCP tool (ci_information or update_self_healing_fix), returns structured result, exits
+2. **$ci-monitor-subagent**: Codex skill that calls one MCP tool (`ci_information` or `update_self_healing_fix`), returns structured result, and exits
 3. **ci-poll-decide.mjs (deterministic script)**: takes ci_information result + state, returns action + status message
 4. **ci-state-update.mjs (deterministic script)**: manages budget gates, post-action state transitions, and cycle classification
 
@@ -163,14 +163,15 @@ prev_failure_classification = null
 
 Repeat until done:
 
-#### 2a. Spawn subagent (FETCH_STATUS)
+#### 2a. Invoke `$ci-monitor-subagent` (FETCH_STATUS)
 
 Determine select fields based on mode:
 
 - **Wait mode**: use WAIT_FIELDS (`cipeUrl,commitSha,cipeStatus`)
 - **Normal mode (first poll or after newCipeDetected)**: use LIGHT_FIELDS
 
-Call the `ci_information` tool with the determined `select` fields for the current branch. Wait for the result before proceeding.
+Invoke `$ci-monitor-subagent` with command `FETCH_STATUS`, the current branch,
+and the determined `select` fields. Wait for the result before proceeding.
 
 #### 2b. Run decision script
 

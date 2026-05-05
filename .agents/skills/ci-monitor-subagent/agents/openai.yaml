@@ -1,0 +1,4 @@
+interface:
+  display_name: 'CI Monitor Subagent'
+  short_description: 'One-shot Nx Cloud CI helper'
+  default_prompt: 'Use $ci-monitor-subagent to fetch one Nx Cloud CI status or self-healing action result.'

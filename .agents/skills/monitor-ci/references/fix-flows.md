@@ -7,12 +7,12 @@
 The script returns `autoApplySkipReason` in its output.
 
 1. Report the skip reason to the user (e.g., "Auto-apply was skipped because the previous CI pipeline execution was triggered by Nx Cloud")
-2. Offer to apply the fix manually — spawn UPDATE_FIX subagent with `APPLY` if user agrees
+2. Offer to apply the fix manually — invoke `$ci-monitor-subagent` with `UPDATE_FIX` and `APPLY` if user agrees
 3. Record `last_cipe_url`, enter wait mode
 
 ### fix_apply_ready
 
-- Spawn UPDATE_FIX subagent with `APPLY`
+- Invoke `$ci-monitor-subagent` with `UPDATE_FIX` and `APPLY`
 - Record `last_cipe_url`, enter wait mode
 
 ### fix_needs_local_verify
@@ -21,12 +21,12 @@ The script returns `verifiableTaskIds` in its output.
 
 1. **Detect package manager:** `pnpm-lock.yaml` → `pnpm nx`, `yarn.lock` → `yarn nx`, otherwise `npx nx`
 2. **Run verifiable tasks in parallel** — spawn `general` subagents for each task
-3. **If all pass** → spawn UPDATE_FIX subagent with `APPLY`, enter wait mode
+3. **If all pass** → invoke `$ci-monitor-subagent` with `UPDATE_FIX` and `APPLY`, enter wait mode
 4. **If any fail** → Apply Locally + Enhance Flow (see below)
 
 ### fix_needs_review
 
-Spawn FETCH_HEAVY subagent, then analyze fix content (`suggestedFixDescription`, `suggestedFixSummary`, `taskFailureSummaries`):
+Invoke `$ci-monitor-subagent` with `FETCH_HEAVY`, then analyze fix content (`suggestedFixDescription`, `suggestedFixSummary`, `taskFailureSummaries`):
 
 - If fix looks correct → apply via MCP
 - If fix needs enhancement → Apply Locally + Enhance Flow
@@ -34,20 +34,20 @@ Spawn FETCH_HEAVY subagent, then analyze fix content (`suggestedFixDescription`,
 
 ### fix_failed / no_fix
 
-Spawn FETCH_HEAVY subagent for `taskFailureSummaries`. Run `ci-state-update.mjs gate --gate-type local-fix` — if not allowed, print message and exit. Otherwise attempt local fix (counter already incremented by gate). If successful → commit, push, enter wait mode. If not → exit with failure.
+Invoke `$ci-monitor-subagent` with `FETCH_HEAVY` for `taskFailureSummaries`. Run `ci-state-update.mjs gate --gate-type local-fix` — if not allowed, print message and exit. Otherwise attempt local fix (counter already incremented by gate). If successful → commit, push, enter wait mode. If not → exit with failure.
 
 ### environment_issue
 
 1. Run `ci-state-update.mjs gate --gate-type env-rerun`. If not allowed, print message and exit.
-2. Spawn UPDATE_FIX subagent with `RERUN_ENVIRONMENT_STATE`
+2. Invoke `$ci-monitor-subagent` with `UPDATE_FIX` and `RERUN_ENVIRONMENT_STATE`
 3. Enter wait mode with `last_cipe_url` set
 
 ### self_healing_throttled
 
-Spawn FETCH_HEAVY subagent for `selfHealingSkipMessage`.
+Invoke `$ci-monitor-subagent` with `FETCH_HEAVY` for `selfHealingSkipMessage`.
 
 1. **Parse throttle message** for CI Attempt URLs (regex: `/cipes/{id}`)
-2. **Reject previous fixes** — for each URL: spawn FETCH_THROTTLE_INFO to get `shortLink`, then UPDATE_FIX with `REJECT`
+2. **Reject previous fixes** — for each URL: invoke `$ci-monitor-subagent` with `FETCH_THROTTLE_INFO` to get `shortLink`, then `UPDATE_FIX` with `REJECT`
 3. **Attempt local fix**: Run `ci-state-update.mjs gate --gate-type local-fix`. If not allowed → skip to step 4. Otherwise use `failedTaskIds` and `taskFailureSummaries` for context.
 4. **Fallback if local fix not possible or budget exhausted**: push empty commit (`git commit --allow-empty -m "ci: rerun after rejecting throttled fixes"`), enter wait mode
 
@@ -67,7 +67,7 @@ Spawn FETCH_HEAVY subagent for `selfHealingSkipMessage`.
 
 ### Apply via MCP
 
-Spawn UPDATE_FIX subagent with `APPLY`. New CI Attempt spawns automatically. No local git ops.
+Invoke `$ci-monitor-subagent` with `UPDATE_FIX` and `APPLY`. New CI Attempt spawns automatically. No local git ops.
 
 ### Apply Locally + Enhance Flow
 
@@ -80,7 +80,7 @@ Spawn UPDATE_FIX subagent with `APPLY`. New CI Attempt spawns automatically. No 
 ### Reject + Fix From Scratch Flow
 
 1. Run `ci-state-update.mjs gate --gate-type local-fix`. If not allowed, print message and exit.
-2. Spawn UPDATE_FIX subagent with `REJECT`
+2. Invoke `$ci-monitor-subagent` with `UPDATE_FIX` and `REJECT`
 3. Fix from scratch locally
 4. Commit and push, enter wait mode
 
