@@ -19,7 +19,7 @@ class BootstrapApplication {
   private configService!: ConfigService;
 
   async run() {
-    this.app = await NestFactory.create(AppModule);
+    this.app = await NestFactory.create(AppModule, { rawBody: true });
 
     this.configService = this.app.get(ConfigService);
     const port = this.configService.getOrThrow<number>(Env.PORT);

@@ -4,6 +4,7 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
 
 import { AppController } from '@/app/app.controller';
 import { AppService } from '@/app/app.service';
+import { ClerkWebhookGuard } from '@/app/clerk-webhook.guard';
 import { USER_SERVICE_TCP_CLIENT } from '@/libs/clients/user-service.client';
 import { AppConfigModule } from '@/libs/configs/config.module';
 import { Env } from '@/libs/configs/env.config';
@@ -27,6 +28,6 @@ import { Env } from '@/libs/configs/env.config';
     ]),
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, ClerkWebhookGuard],
 })
 export class AppModule {}

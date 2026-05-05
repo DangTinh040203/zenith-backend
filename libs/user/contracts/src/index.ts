@@ -1,0 +1,76 @@
+export enum ClerkUserWebhook {
+  USER_CREATED = 'user.created',
+  USER_UPDATED = 'user.updated',
+  USER_DELETED = 'user.deleted',
+}
+
+export interface ClerkEmailVerification {
+  status: string;
+  strategy: string;
+}
+
+export interface ClerkLinkedAccount {
+  type: string;
+  id: string;
+}
+
+export interface ClerkEmailAddress {
+  id: string;
+  email_address: string;
+  verification: ClerkEmailVerification | null;
+  linked_to: ClerkLinkedAccount[];
+}
+
+export interface UserProfile {
+  id: string;
+  externalId: string | null;
+  displayName: string | null;
+  avatar: string | null;
+  email: string;
+}
+
+export interface CreateUserFromClerkInput {
+  clerkUserId: string;
+  email: string;
+  displayName: string | null;
+  avatar: string | null;
+}
+
+export interface ClerkUserPayload {
+  id: string;
+  object: string;
+  username: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  profile_image_url: string;
+  image_url: string;
+  has_image: boolean;
+  primary_email_address_id: string | null;
+  primary_phone_number_id: string | null;
+  primary_web3_wallet_id: string | null;
+  password_enabled: boolean;
+  two_factor_enabled: boolean;
+  totp_enabled: boolean;
+  backup_code_enabled: boolean;
+  email_addresses: ClerkEmailAddress[];
+  banned: boolean;
+  locked: boolean;
+  lockout_expires_in_seconds: number | null;
+  verification_attempts_remaining: number;
+  created_at: number;
+  updated_at: number;
+  last_active_at: number | null;
+}
+
+export interface ClerkWebhook {
+  data: ClerkUserPayload;
+  instance_id: string;
+  object: string;
+  timestamp: number;
+  type: ClerkUserWebhook;
+}
+
+export const USER_SERVICE_PATTERNS = {
+  LIST_USERS: 'users.list',
+  PROCESS_CLERK_WEBHOOK: 'users.clerk-webhook.process',
+} as const;

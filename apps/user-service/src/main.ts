@@ -12,9 +12,7 @@ class BootstrapApplication {
   private configService!: ConfigService;
 
   async run() {
-    this.app = await NestFactory.create<NestExpressApplication>(AppModule, {
-      rawBody: true,
-    });
+    this.app = await NestFactory.create<NestExpressApplication>(AppModule);
 
     this.configService = this.app.get(ConfigService);
     const tcpPort = this.configService.getOrThrow<number>(Env.TCP_PORT);
@@ -33,7 +31,7 @@ class BootstrapApplication {
       BootstrapApplication.name,
     );
     Logger.log(
-      `Clerk webhooks HTTP POST http://0.0.0.0:${httpPort}/users/clerk`,
+      `User service HTTP listening on http://0.0.0.0:${httpPort}`,
       BootstrapApplication.name,
     );
   }

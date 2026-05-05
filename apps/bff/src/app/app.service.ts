@@ -1,6 +1,11 @@
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ClientProxy } from '@nestjs/microservices';
+import {
+  type ClerkWebhook,
+  USER_SERVICE_PATTERNS,
+  type UserProfile,
+} from '@zenith-backend/user-contracts';
 import { firstValueFrom } from 'rxjs';
 
 import { USER_SERVICE_TCP_CLIENT } from '@/libs/clients/user-service.client';
@@ -31,7 +36,21 @@ export class AppService implements OnModuleInit {
   }
 
   /** Proxies to user-service over Nest TCP (`users.list`). */
-  listUsersFromUserService(): Promise<unknown> {
-    return firstValueFrom(this.userServiceClient.send('users.list', {}));
+  listUsersFromUserService(): Promise<UserProfile[]> {
+    return firstValueFrom(
+      this.userServiceClient.send<UserProfile[], Record<string, never>>(
+        USER_SERVICE_PATTERNS.LIST_USERS,
+        {},
+      ),
+    );
+  }
+
+  processClerkWebhook(event: ClerkWebhook | undefined): Promise<void> {
+    return firstValueFrom(
+      this.userServiceClient.send<void, ClerkWebhook | undefined>(
+        USER_SERVICE_PATTERNS.PROCESS_CLERK_WEBHOOK,
+        event,
+      ),
+    );
   }
 }

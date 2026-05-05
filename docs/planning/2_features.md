@@ -26,29 +26,42 @@ These capabilities exist in **`zenith-backend`** as of the planning baseline.
 
 ### 2.1 Runtime — BFF HTTP API (`apps/bff`)
 
-| ID           | Feature                      | Description                                                                                                          | Primary surface                       |
-| ------------ | ---------------------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
-| **F-BFF-01** | **Global API prefix**        | All HTTP routes are mounted under the `/api` prefix.                                                                 | `main.ts` (`setGlobalPrefix('api')`). |
-| **F-BFF-02** | **Configurable listen port** | Server binds to `process.env.PORT` or **3000** by default.                                                           | `main.ts`.                            |
-| **F-BFF-03** | **Sample JSON endpoint**     | `GET /api` returns a static JSON payload `{ "message": "Hello API" }` for smoke checks and scaffolding verification. | `AppController` → `AppService`.       |
-| **F-BFF-04** | **NestJS bootstrap**         | Application starts via `NestFactory.create(AppModule)` with startup logging.                                         | `main.ts`, `AppModule`.               |
+| ID           | Feature                         | Description                                                                                                   | Primary surface                       |
+| ------------ | ------------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| **F-BFF-01** | **Versioned global API prefix** | HTTP routes are mounted under `/api/v1` by default (`API_PREFIX` + `API_VERSION`).                            | `main.ts`.                            |
+| **F-BFF-02** | **Configurable listen port**    | Server binds to `PORT` from environment.                                                                      | `main.ts`.                            |
+| **F-BFF-03** | **Sample JSON endpoint**        | `GET /api/v1` returns `{ "message": "Hello API" }` for smoke checks and scaffolding verification.             | `AppController` → `AppService`.       |
+| **F-BFF-04** | **NestJS bootstrap**            | Application starts via `NestFactory.create(AppModule)` with raw body support for signed webhooks.             | `main.ts`, `AppModule`.               |
+| **F-BFF-05** | **Clerk webhook ingress**       | `POST /api/v1/webhooks/clerk` verifies Svix signatures and accepts Clerk sign-up events only through the BFF. | `ClerkWebhookGuard`, `AppController`. |
+| **F-BFF-06** | **User-service TCP proxy**      | BFF calls `user-service` over Nest TCP for user listing and verified Clerk webhook projection.                | `AppService`, `libs/user/contracts`.  |
 
-**Non-features (explicit gaps):** authentication, authorization, persistence, file upload, transcoding, catalog, playback state, analytics, OpenAPI, rate limiting, and CORS policy are **not** implemented in the Nest app yet.
+**Non-features (explicit gaps):** end-user route authentication, authorization, file upload, transcoding, catalog, playback state, analytics, OpenAPI, and rate limiting are **not** implemented in the Nest app yet.
 
-### 2.5 Current HTTP contract (smoke)
+### 2.1a Runtime — User service (`apps/user-service`)
 
-| Method + path | Response                     | Purpose                                                   |
-| ------------- | ---------------------------- | --------------------------------------------------------- |
-| `GET /api`    | `{ "message": "Hello API" }` | Verify build, port, and global prefix in CI or local dev. |
+| ID            | Feature                       | Description                                                                                                     | Primary surface                      |
+| ------------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| **F-USER-01** | **Nest TCP user listing**     | Handles `users.list` for BFF aggregation.                                                                       | `UserTcpController`, `UserService`.  |
+| **F-USER-02** | **Clerk projection over TCP** | Handles verified BFF events via `users.clerk-webhook.process` and creates users from `user.created`.            | `ClerkWebhookService`, strategy.     |
+| **F-USER-03** | **Postgres user persistence** | Stores users, roles, and role links with TypeORM entities and a migration stream.                               | `TypeormUserRepository`, migrations. |
+| **F-USER-04** | **Redis user profile cache**  | Caches user profiles by internal id and Clerk id after Postgres upsert succeeds.                                | `RedisUserCacheService`.             |
+| **F-USER-05** | **Shared contracts**          | BFF and user-service share Clerk webhook types, user DTOs, and TCP pattern names through `libs/user/contracts`. | Nx library.                          |
 
-There is **no** versioning prefix (for example `/api/v1`) yet; when public clients exist, introduce versioned routes or explicit `Accept` negotiation and document breaking-change policy.
+### 2.5 Current HTTP contract
+
+| Method + path                 | Response                                                                        | Purpose                                                   |
+| ----------------------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `GET /api/v1`                 | `{ "message": "Hello API" }`                                                    | Verify build, port, and global prefix in CI or local dev. |
+| `POST /api/v1/webhooks/clerk` | `{ "received": true }` after valid Svix signature and downstream TCP processing | Clerk `user.created` webhook ingress.                     |
+
+User-service HTTP is not the Clerk ingress surface; browser and webhook traffic should enter through BFF.
 
 ### 2.6 Local verification (developer)
 
-| Step | Command / action                                              | Expected                                                      |
-| ---- | ------------------------------------------------------------- | ------------------------------------------------------------- |
-| 1    | `npx nx serve bff` (or `nx run bff:serve` per workspace docs) | Log line with `http://localhost:3000/api` (or `PORT` if set). |
-| 2    | `curl -s http://localhost:3000/api`                           | JSON body with `Hello API`.                                   |
+| Step | Command / action                       | Expected                                                                     |
+| ---- | -------------------------------------- | ---------------------------------------------------------------------------- |
+| 1    | `pnpm nx serve bff`                    | Log line with `http://localhost:3000/api/v1` (or configured prefix/version). |
+| 2    | `curl -s http://localhost:3000/api/v1` | JSON body with `Hello API`.                                                  |
 
 Adjust commands if `AGENTS.md` or root scripts define a preferred alias.
 

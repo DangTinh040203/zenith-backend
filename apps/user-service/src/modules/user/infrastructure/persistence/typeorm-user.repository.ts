@@ -1,12 +1,12 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import type {
+  CreateUserFromClerkInput,
+  UserProfile,
+} from '@zenith-backend/user-contracts';
 import { Repository } from 'typeorm';
 
-import {
-  type CreateUserFromClerkInput,
-  type IUserRepository,
-} from '@/modules/user/application/interfaces';
-import type { UserProfile } from '@/modules/user/domain';
+import { type IUserRepository } from '@/modules/user/application/interfaces';
 import { User } from '@/modules/user/infrastructure/persistence/entities/user.entity';
 
 @Injectable()
@@ -30,12 +30,14 @@ export class TypeormUserRepository implements IUserRepository {
     }));
   }
 
-  async createFromClerkWebhook(input: CreateUserFromClerkInput): Promise<void> {
+  async createFromClerkWebhook(
+    input: CreateUserFromClerkInput,
+  ): Promise<UserProfile> {
     const existingByExternal = await this.usersRepository.findOne({
       where: { externalId: input.clerkUserId },
     });
     if (existingByExternal) {
-      return;
+      return this.toProfile(existingByExternal);
     }
 
     const existingByEmail = await this.usersRepository.findOne({
@@ -47,7 +49,7 @@ export class TypeormUserRepository implements IUserRepository {
       );
     }
 
-    await this.usersRepository.save(
+    const user = await this.usersRepository.save(
       this.usersRepository.create({
         email: input.email,
         displayName: input.displayName,
@@ -55,5 +57,17 @@ export class TypeormUserRepository implements IUserRepository {
         externalId: input.clerkUserId,
       }),
     );
+
+    return this.toProfile(user);
+  }
+
+  private toProfile(user: User): UserProfile {
+    return {
+      id: user.id,
+      externalId: user.externalId,
+      displayName: user.displayName,
+      avatar: user.avatar,
+      email: user.email,
+    };
   }
 }

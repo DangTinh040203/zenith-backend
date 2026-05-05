@@ -3,7 +3,10 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@zenith-backend/user-contracts": [
+        "../../libs/user/contracts/src/index.ts"
+      ]
     },
     "outDir": "../../dist/out-tsc",
     "module": "commonjs",

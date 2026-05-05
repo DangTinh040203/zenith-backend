@@ -42,14 +42,14 @@ This section answers **how many backend services** Zenith targets and **what eac
 
 ### 3.2 The six Nest applications (names and roles)
 
-| #     | Planned service name   | Example `apps/*` slug                | Primary responsibility                                                                                                                                                                                                                       |
-| ----- | ---------------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **1** | **BFF**                | `bff` (today)                        | HTTP aggregation and client-specific shaping for Next.js / mobile; validates **Clerk** session JWTs on ingress to the backend mesh; does not own long-lived domain tables.                                                                   |
-| **2** | **User & entitlement** | `user-service` (today; was `user-api` in earlier drafts) | Profiles, **subscriptions**, **entitlements**, Clerk **webhook** handling, internal user ids; **PostgreSQL** (or equivalent). **Browser clients never call this service over HTTP**—they go through the **BFF**; the BFF reaches user-service over **Nest TCP** (`@nestjs/microservices`). A minimal **HTTP** listener remains for **health/readiness** only (same process, internal network). Maps to **Identity** in the overview catalog for _application_ identity, while Clerk handles _authentication_. |
-| **3** | **Catalog**            | e.g. `catalog-api`                   | Titles, seasons/episodes, artwork references, categories, discovery; **MongoDB** (or similar); search index updates via events.                                                                                                              |
-| **4** | **Transcoding engine** | e.g. `transcode-api` / worker deploy | Ingest triggers, FFmpeg ladder, thumbnails, packaging (HLS/DASH), writes to object storage, emits **TranscodeCompleted**. Often **CPU-heavy**—scale separately from read APIs.                                                               |
-| **5** | **Playback**           | e.g. `playback-api`                  | Entitlement checks against Zenith rules, playback session, manifest / signed URL issuance, resume; **Redis** hot paths + durable progress per ADR.                                                                                           |
-| **6** | **Insight**            | e.g. `insight-api`                   | Engagement and ops event ingestion, aggregation, export to BI; **Kafka** or **RabbitMQ** consumers (see tech stack).                                                                                                                         |
+| #     | Planned service name   | Example `apps/*` slug                                    | Primary responsibility                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ----- | ---------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **1** | **BFF**                | `bff` (today)                                            | HTTP aggregation and client-specific shaping for Next.js / mobile; owns Clerk webhook HTTP ingress, verifies Svix signatures, and forwards verified events over internal TCP. Does not own long-lived domain tables.                                                                                                                                                                                                                                                                                                                             |
+| **2** | **User & entitlement** | `user-service` (today; was `user-api` in earlier drafts) | Profiles, **subscriptions**, **entitlements**, verified Clerk webhook projection, internal user ids; **PostgreSQL** plus Redis profile cache. **Browser clients and Clerk webhooks never call this service over HTTP**—they go through the **BFF**; the BFF reaches user-service over **Nest TCP** (`@nestjs/microservices`). A minimal **HTTP** listener remains for **health/readiness** only (same process, internal network). Maps to **Identity** in the overview catalog for _application_ identity, while Clerk handles _authentication_. |
+| **3** | **Catalog**            | e.g. `catalog-api`                                       | Titles, seasons/episodes, artwork references, categories, discovery; **MongoDB** (or similar); search index updates via events.                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| **4** | **Transcoding engine** | e.g. `transcode-api` / worker deploy                     | Ingest triggers, FFmpeg ladder, thumbnails, packaging (HLS/DASH), writes to object storage, emits **TranscodeCompleted**. Often **CPU-heavy**—scale separately from read APIs.                                                                                                                                                                                                                                                                                                                                                                   |
+| **5** | **Playback**           | e.g. `playback-api`                                      | Entitlement checks against Zenith rules, playback session, manifest / signed URL issuance, resume; **Redis** hot paths + durable progress per ADR.                                                                                                                                                                                                                                                                                                                                                                                               |
+| **6** | **Insight**            | e.g. `insight-api`                                       | Engagement and ops event ingestion, aggregation, export to BI; **Kafka** or **RabbitMQ** consumers (see tech stack).                                                                                                                                                                                                                                                                                                                                                                                                                             |
 
 ### 3.3 Optional future split (not in the base six)
 
@@ -69,12 +69,12 @@ This section answers **how many backend services** Zenith targets and **what eac
 
 Use a **hexagonal / clean** bias inside each app or lib slice:
 
-| Layer                     | Responsibility                                        | Nest artifacts                                          |
-| ------------------------- | ----------------------------------------------------- | ------------------------------------------------------- |
+| Layer                     | Responsibility                                                                        | Nest artifacts                                          |
+| ------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------- |
 | **Interface / transport** | HTTP controllers, gRPC controllers, **Nest TCP** message handlers (`@MessagePattern`) | `*.controller.ts`, consumer classes                     |
-| **Application**           | Use cases, orchestration, transactions                | `*.service.ts` (application services), command handlers |
-| **Domain**                | Entities, value objects, domain services, invariants  | Plain TS classes/modules with **no** Nest decorators    |
-| **Infrastructure**        | ORM repositories, HTTP clients, S3, broker publishers | `*.repository.ts`, adapters implementing domain ports   |
+| **Application**           | Use cases, orchestration, transactions                                                | `*.service.ts` (application services), command handlers |
+| **Domain**                | Entities, value objects, domain services, invariants                                  | Plain TS classes/modules with **no** Nest decorators    |
+| **Infrastructure**        | ORM repositories, HTTP clients, S3, broker publishers                                 | `*.repository.ts`, adapters implementing domain ports   |
 
 **Guards, pipes, interceptors** belong at the interface layer (cross-cutting). **Do not** call `HttpService` from domain entities.
 
@@ -84,11 +84,11 @@ Use a **hexagonal / clean** bias inside each app or lib slice:
 
 ### 5.1 Apps
 
-| App                   | Role today                                | Future note                                            |
-| --------------------- | ----------------------------------------- | ------------------------------------------------------ |
-| `apps/bff`            | Public or semi-public HTTP aggregation    | May remain BFF-only, or shrink as dedicated APIs grow. |
-| `apps/user-service`   | User/entitlement domain; **TCP** for BFF RPC; HTTP for health only | Grows with webhooks, subscriptions, entitlements.      |
-| `apps/*-api` (future) | One deployable per stable bounded context | Each with own Dockerfile, health checks, migrations.   |
+| App                   | Role today                                                                                       | Future note                                            |
+| --------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------ |
+| `apps/bff`            | Public or semi-public HTTP aggregation                                                           | May remain BFF-only, or shrink as dedicated APIs grow. |
+| `apps/user-service`   | User/entitlement domain; **TCP** for BFF RPC and verified Clerk projection; HTTP for health only | Grows with subscriptions and entitlements.             |
+| `apps/*-api` (future) | One deployable per stable bounded context                                                        | Each with own Dockerfile, health checks, migrations.   |
 
 ### 5.2 Libraries (`libs/`)
 
@@ -127,12 +127,12 @@ The **first** split is often “BFF stays thin, extract **Catalog** or **User & 
 
 ## 7. Synchronous integration
 
-| Pattern                    | When to use                                     | Pitfalls                                                                    |
-| -------------------------- | ----------------------------------------------- | --------------------------------------------------------------------------- |
-| **HTTP (REST)**            | Public APIs, third-party callbacks              | Version URLs; document errors with stable codes.                            |
+| Pattern                                | When to use                                                                       | Pitfalls                                                                                                                 |
+| -------------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| **HTTP (REST)**                        | Public APIs, third-party callbacks                                                | Version URLs; document errors with stable codes.                                                                         |
 | **Nest TCP** (`@nestjs/microservices`) | First-party **BFF → domain service** RPC in this repo (e.g. BFF → `user-service`) | Define stable **message patterns** (string keys); timeouts and payload versioning like any RPC. Not for browser clients. |
-| **gRPC**                   | Low-latency internal calls with generated stubs | Deadlines required; proto compatibility discipline.                         |
-| **Direct in-process call** | Same Node process, same deployable              | Do not bypass module boundaries—import application service, not repository. |
+| **gRPC**                               | Low-latency internal calls with generated stubs                                   | Deadlines required; proto compatibility discipline.                                                                      |
+| **Direct in-process call**             | Same Node process, same deployable                                                | Do not bypass module boundaries—import application service, not repository.                                              |
 
 Always propagate **cancellation** and **timeouts** from controllers into downstream calls.
 

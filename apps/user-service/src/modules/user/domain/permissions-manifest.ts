@@ -1,7 +1,7 @@
 import manifest from '@/modules/user/domain/permissions.manifest.json';
 
-export type PermissionsManifest = {
+export interface PermissionsManifest {
   permissions: string[];
-};
+}
 
 export const permissionsManifest: PermissionsManifest = manifest;

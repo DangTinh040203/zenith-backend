@@ -1,15 +1,11 @@
-import type { UserProfile } from '@/modules/user/domain';
+import type {
+  CreateUserFromClerkInput,
+  UserProfile,
+} from '@zenith-backend/user-contracts';
 
 export const USER_REPOSITORY_TOKEN = Symbol('USER_REPOSITORY_TOKEN');
 
-export type CreateUserFromClerkInput = {
-  clerkUserId: string;
-  email: string;
-  displayName: string | null;
-  avatar: string | null;
-};
-
 export interface IUserRepository {
   findAllProfilesOrderedByCreatedDesc(): Promise<UserProfile[]>;
-  createFromClerkWebhook(input: CreateUserFromClerkInput): Promise<void>;
+  createFromClerkWebhook(input: CreateUserFromClerkInput): Promise<UserProfile>;
 }

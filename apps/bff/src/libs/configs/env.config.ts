@@ -8,6 +8,7 @@ export enum Env {
 
   API_PREFIX = 'API_PREFIX',
   API_VERSION = 'API_VERSION',
+  CLERK_WEBHOOK_SECRET = 'CLERK_WEBHOOK_SECRET',
 
   /** Nest TCP host for `user-service` (not browser-facing). */
   USER_SERVICE_HOST = 'USER_SERVICE_HOST',
@@ -20,6 +21,7 @@ export const validationSchema = Joi.object({
   [Env.FRONTEND_ORIGIN]: Joi.string().required(),
   [Env.API_PREFIX]: Joi.string().default('api'),
   [Env.API_VERSION]: Joi.string().default('1'),
+  [Env.CLERK_WEBHOOK_SECRET]: Joi.string().required(),
   [Env.USER_SERVICE_HOST]: Joi.string().required(),
   [Env.USER_SERVICE_TCP_PORT]: Joi.number().required(),
 });

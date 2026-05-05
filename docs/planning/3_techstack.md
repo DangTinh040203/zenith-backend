@@ -34,14 +34,14 @@ Shared **DTOs**, **domain types**, and **event envelope** shapes live in Nx **li
 
 ### 1.4 Current repository snapshot (authoritative minimal facts)
 
-| Item                   | Detail                                                                   |
-| ---------------------- | ------------------------------------------------------------------------ |
-| **Applications**       | `bff` — NestJS app under `apps/bff/`. **`user-service`** — NestJS app under `apps/user-service/` (domain users/entitlements; **TCP** for BFF RPC, **HTTP** for health only). |
-| **HTTP prefix**        | Global prefix `api` on both apps’ HTTP listeners (see each app’s `main.ts`). |
-| **Default port**       | `process.env.PORT` (BFF often **3000** when unset in code paths).        |
-| **NestJS**             | **^11** (`@nestjs/common`, `@nestjs/core`, `@nestjs/platform-express`, `@nestjs/microservices` for TCP). |
-| **Build**              | Webpack via `nx:run-commands` + `webpack-cli` per app `project.json`.      |
-| **Other runtime deps** | `axios`, `rxjs`, `reflect-metadata`, `typeorm`, `pg` (user-service DB).  |
+| Item                   | Detail                                                                                                                                                                                                                     |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Applications**       | `bff` — NestJS app under `apps/bff/` that owns Clerk webhook HTTP ingress. **`user-service`** — NestJS app under `apps/user-service/` (domain users/entitlements; **TCP** for BFF RPC, **HTTP** for internal health only). |
+| **HTTP prefix**        | BFF global prefix defaults to `api/v1` (`API_PREFIX` + `API_VERSION`).                                                                                                                                                     |
+| **Default port**       | `process.env.PORT` (BFF often **3000** when unset in code paths).                                                                                                                                                          |
+| **NestJS**             | **^11** (`@nestjs/common`, `@nestjs/core`, `@nestjs/platform-express`, `@nestjs/microservices` for TCP).                                                                                                                   |
+| **Build**              | Webpack via `nx:run-commands` + `webpack-cli` per app `project.json`.                                                                                                                                                      |
+| **Other runtime deps** | `axios`, `rxjs`, `reflect-metadata`, `typeorm`, `pg` (user-service DB), `redis` (user profile cache), `svix` (Clerk webhook verification), `dotenv` (migration env loading).                                               |
 
 Everything below is **target architecture** unless you add the dependency and wire it in an app.
 
@@ -69,14 +69,14 @@ Versions drift over time; this table reflects the **planning baseline**—refres
 
 **Decision:** end-user **authentication is delegated to [Clerk](https://clerk.com/)**—sign-in, sign-up, sessions, OAuth/social providers, MFA, and (if needed) **Organizations** use Clerk’s hosted UIs and dashboards. The backend **does not** implement custom username/password storage, credential hashing, or login forms.
 
-| Area | Direction |
-| ---- | --------- |
-| **Next.js (browser)** | Clerk’s React/Next SDK (`@clerk/nextjs`): `<ClerkProvider>`, middleware for route protection, session hooks. Align with Clerk’s recommended App Router patterns. |
-| **Nest BFF / APIs** | Treat Clerk as the **identity provider**: verify **Clerk-issued JWTs** (session tokens) on protected routes using `@clerk/backend` (`verifyToken`) or equivalent JWKS validation; map `sub` (Clerk user id) to your internal user/tenant rows if you maintain a profile store. |
-| **Webhooks** | Use Clerk **webhooks** (`user.created`, `user.updated`, `user.deleted`, org events if used) to sync a minimal user projection into **PostgreSQL** (or another store you own) for entitlements, billing keys, and foreign keys—Clerk remains source of truth for credentials. |
-| **Service-to-service** | Browser → BFF uses Clerk session/JWT; **east-west** calls between Nest services continue to use **mTLS**, mesh identity, or short-lived internal JWTs **after** the BFF has established the user context—do not forward Clerk secret keys to workers. |
-| **Secrets / config** | `CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, webhook signing secret, and instance/domain settings via environment (12-factor); never commit real values. |
-| **Typical packages** | `@clerk/nextjs` on the Next.js app; `@clerk/backend` (or official verify helpers) on Nest for JWT validation. |
+| Area                   | Direction                                                                                                                                                                                                                                                                      |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Next.js (browser)**  | Clerk’s React/Next SDK (`@clerk/nextjs`): `<ClerkProvider>`, middleware for route protection, session hooks. Align with Clerk’s recommended App Router patterns.                                                                                                               |
+| **Nest BFF / APIs**    | Treat Clerk as the **identity provider**: verify **Clerk-issued JWTs** (session tokens) on protected routes using `@clerk/backend` (`verifyToken`) or equivalent JWKS validation; map `sub` (Clerk user id) to your internal user/tenant rows if you maintain a profile store. |
+| **Webhooks**           | Clerk calls the **BFF** webhook endpoint. BFF verifies Svix signatures using raw body bytes, then forwards verified events to `user-service` over Nest TCP to sync a minimal user projection into **PostgreSQL** and Redis cache.                                              |
+| **Service-to-service** | Browser → BFF uses Clerk session/JWT; **east-west** calls between Nest services continue to use **mTLS**, mesh identity, or short-lived internal JWTs **after** the BFF has established the user context—do not forward Clerk secret keys to workers.                          |
+| **Secrets / config**   | Clerk webhook signing secret lives in BFF environment (`CLERK_WEBHOOK_SECRET`); service-owned database and Redis connection strings live in the owning service environment. Never commit real values.                                                                          |
+| **Typical packages**   | `@clerk/nextjs` on the Next.js app; `@clerk/backend` (or official verify helpers) on Nest for JWT validation.                                                                                                                                                                  |
 
 **What you still implement in Zenith:** authorization (**entitlements**, catalog roles, playback rules), linking Clerk `userId` to subscription/billing state, and **webhook idempotency** handlers. Record any normative Clerk + Nest wiring in an ADR when the first integration lands.
 
@@ -104,15 +104,15 @@ A production **Next.js** app may live outside this repo; contracts (OpenAPI, Gra
 
 ### 3.1 Internal synchronous RPC (Nest TCP vs gRPC)
 
-| Transport | When to use in Zenith | Contracts |
-| --------- | --------------------- | --------- |
+| Transport                                               | When to use in Zenith                                                                                                                               | Contracts                                                                                                  |
+| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | **Nest TCP** (`@nestjs/microservices`, `Transport.TCP`) | **BFF → `user-service`** (and similar in-process-friendly splits in the monorepo). Same runtime and DTOs as the Nest app; no `.proto` compile step. | **Message pattern** strings (e.g. `users.list`) and shared TS DTOs in `libs/*` when you extract contracts. |
-| **gRPC** | Cross-language services, generated stubs, strict binary contracts at scale. | `.proto` in a shared lib; generate TS stubs in CI or on demand. |
+| **gRPC**                                                | Cross-language services, generated stubs, strict binary contracts at scale.                                                                         | `.proto` in a shared lib; generate TS stubs in CI or on demand.                                            |
 
-| Topic (applies to both)    | Practice                                                                                                    |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| **Evolution**              | Field addition = backward compatible where possible; renames need rollout discipline (new pattern + dual read period for TCP; proto rules for gRPC). |
-| **Resilience**             | **Deadlines** on every call; propagate **cancellation**; bounded concurrency on servers.                    |
+| Topic (applies to both)    | Practice                                                                                                                                                                                               |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Evolution**              | Field addition = backward compatible where possible; renames need rollout discipline (new pattern + dual read period for TCP; proto rules for gRPC).                                                   |
+| **Resilience**             | **Deadlines** on every call; propagate **cancellation**; bounded concurrency on servers.                                                                                                               |
 | **AuthN between services** | End users: **Clerk JWT** validated at BFF/gateway only. **Do not** expose user-domain HTTP to the browser—BFF aggregates. East–west: JWT/mTLS/mesh identity per environment—document the chosen model. |
 
 ### 3.2 RabbitMQ vs Kafka (events)
@@ -149,12 +149,12 @@ You may run **both**: Rabbit (or Redis Streams) for command-like jobs and Kafka 
 
 ### 4.3 Redis (speed layer)
 
-| Use                          | Notes                                                                            |
-| ---------------------------- | -------------------------------------------------------------------------------- |
+| Use                          | Notes                                                                                                                                                                                   |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Session / device binding** | Prefer **Clerk** for browser/session concerns; use Redis for BFF rate limits, playback tokens, or denormalized hot reads—not as a second credential store unless an ADR says otherwise. |
-| **Rate limiting**            | Token bucket per IP/user/API key at gateway edge.                                |
-| **Cache**                    | Cache-aside with explicit TTLs; stampede protection for hot keys (singleflight). |
-| **Coordination**             | Locks sparingly; prefer lease patterns and short TTLs.                           |
+| **Rate limiting**            | Token bucket per IP/user/API key at gateway edge.                                                                                                                                       |
+| **Cache**                    | Cache-aside with explicit TTLs; stampede protection for hot keys (singleflight).                                                                                                        |
+| **Coordination**             | Locks sparingly; prefer lease patterns and short TTLs.                                                                                                                                  |
 
 **Redis is not** the source of truth for billing or permanent entitlements—always have a recovery path from PostgreSQL (or the owning store).
 
